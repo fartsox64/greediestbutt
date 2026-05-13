@@ -502,8 +502,6 @@ async def upsert_entries(
             time_taken = parsed.time_taken if parsed else None
         return {
             "daily_run_id": run.id,
-            "version": run.version.value,
-            "sort_type": run.sort_type.value,
             "rank": e.rank,
             "steam_id": e.steam_id,
             "value": e.value,
@@ -525,8 +523,8 @@ async def upsert_entries(
 
     rows = [_row(e) for e in raw_entries]
 
-    # asyncpg caps query parameters at 32767; each row has 20 columns → max 1638 rows/batch
-    BATCH_SIZE = 1600
+    # asyncpg caps query parameters at 32767; each row has 18 columns → max 1820 rows/batch
+    BATCH_SIZE = 1800
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i : i + BATCH_SIZE]
         stmt = pg_insert(LeaderboardEntry).values(batch)
@@ -907,14 +905,17 @@ async def refresh_overall_stats(
     if steam_ids is not None:
         params["steam_ids"] = steam_ids
 
-    # Filter directly on denormalized version/sort_type — no JOIN to daily_runs.
-    # ix_le_vs_steam_rank covers (version, sort_type, steam_id, rank) WHERE hidden = false,
-    # enabling a pure index-only scan for the hash aggregation.
-    #
+    # dr_ids is MATERIALIZED so the planner executes it once up front and uses
+    # the resulting run-id list to drive targeted index seeks on ix_le_visible_run_steam,
+    # rather than doing a full hash join across all 66 M entries.
     # auto_banned is MATERIALIZED so PostgreSQL doesn't inline it into the main
     # scan (which would create a catastrophic self-join on 66 M rows).
     cursor = await db.execute(text(f"""
-        WITH auto_banned AS MATERIALIZED (
+        WITH dr_ids AS MATERIALIZED (
+            SELECT id FROM daily_runs
+            WHERE version = :version AND sort_type = :sort_type
+        ),
+        auto_banned AS MATERIALIZED (
             SELECT steam_id
             FROM leaderboard_entries
             WHERE hidden = true
@@ -935,8 +936,7 @@ async def refresh_overall_stats(
             NOW()
         FROM leaderboard_entries le
         WHERE le.hidden = false
-          AND le.version = :version
-          AND le.sort_type = :sort_type
+          AND le.daily_run_id IN (SELECT id FROM dr_ids)
           AND le.steam_id NOT IN (SELECT steam_id FROM auto_banned)
           {player_filter}
         GROUP BY le.steam_id

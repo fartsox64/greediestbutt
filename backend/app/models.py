@@ -82,8 +82,6 @@ class LeaderboardEntry(Base):
     daily_run_id = Column(
         Integer, ForeignKey("daily_runs.id", ondelete="CASCADE"), nullable=False
     )
-    version = Column(String(50), nullable=False)
-    sort_type = Column(String(10), nullable=False)
     rank = Column(Integer, nullable=False)
     steam_id = Column(BigInteger, nullable=False)
     # For score leaderboards: in-game score points.
@@ -119,8 +117,6 @@ class LeaderboardEntry(Base):
         Index("ix_leaderboard_entries_daily_run_rank", "daily_run_id", "rank"),
         Index("ix_le_steam_id", "steam_id"),
         Index("ix_le_hidden_steam_id", "hidden", "steam_id"),
-        Index("ix_le_vs_steam_rank", "version", "sort_type", "steam_id", "rank",
-              postgresql_where="hidden = false"),
     )
 
 
