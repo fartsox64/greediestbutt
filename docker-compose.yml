@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: greediest_butt
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:-postgres}@db:5432/greediest_butt
+      APP_URL: ${APP_URL:-http://localhost}
+      SESSION_SECRET: ${SESSION_SECRET:-changeme-set-SESSION_SECRET-in-production}
+      STEAM_API_KEY: ${STEAM_API_KEY:-}
+      AFTERBIRTH_SCORE_PATTERN: ${AFTERBIRTH_SCORE_PATTERN:-}
+      AFTERBIRTH_TIME_PATTERN: ${AFTERBIRTH_TIME_PATTERN:-}
+      AFTERBIRTH_PLUS_SCORE_PATTERN: ${AFTERBIRTH_PLUS_SCORE_PATTERN:-}
+      AFTERBIRTH_PLUS_TIME_PATTERN: ${AFTERBIRTH_PLUS_TIME_PATTERN:-}
+      REPENTANCE_SCORE_PATTERN: ${REPENTANCE_SCORE_PATTERN:-}
+      REPENTANCE_TIME_PATTERN: ${REPENTANCE_TIME_PATTERN:-}
+      REPENTANCE_PLUS_SOLO_SCORE_PATTERN: ${REPENTANCE_PLUS_SOLO_SCORE_PATTERN:-}
+      REPENTANCE_PLUS_SOLO_TIME_PATTERN: ${REPENTANCE_PLUS_SOLO_TIME_PATTERN:-}
+      REPENTANCE_PLUS_COOP_SCORE_PATTERN: ${REPENTANCE_PLUS_COOP_SCORE_PATTERN:-}
+      REPENTANCE_PLUS_COOP_TIME_PATTERN: ${REPENTANCE_PLUS_COOP_TIME_PATTERN:-}
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

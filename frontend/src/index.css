@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0d0d0d;
+  color: #e8e8e8;
+  font-family: "Share Tech Mono", monospace;
+}
+
+h1,
+h2,
+.font-title {
+  font-family: "Press Start 2P", monospace;
+}
+
+/* ── Rendered markdown prose ───────────────────────────────────────── */
+.isaac-prose { line-height: 1.7; }
+.isaac-prose h1 { font-family: "Press Start 2P", monospace; color: #DAA520; font-size: 1rem;    margin: 1.75rem 0 0.75rem; }
+.isaac-prose h2 { font-family: "Press Start 2P", monospace; color: #DAA520; font-size: 0.75rem; margin: 1.5rem  0 0.5rem;  }
+.isaac-prose h3 { color: #e8e8e8; font-weight: 700; font-size: 0.9rem;  margin: 1.25rem 0 0.4rem; }
+.isaac-prose p  { color: #e8e8e8; font-size: 0.875rem; margin-bottom: 0.85rem; }
+.isaac-prose ul { list-style: disc    outside; padding-left: 1.5rem; margin-bottom: 0.85rem; }
+.isaac-prose ol { list-style: decimal outside; padding-left: 1.5rem; margin-bottom: 0.85rem; }
+.isaac-prose li { color: #e8e8e8; font-size: 0.875rem; margin-bottom: 0.2rem; }
+.isaac-prose li p { margin-bottom: 0; }
+.isaac-prose blockquote { border-left: 2px solid #DAA520; padding-left: 1rem; color: #888; font-style: italic; margin: 1rem 0; }
+.isaac-prose code { color: #DAA520; background: #1a1a1a; padding: 0.1rem 0.3rem; font-size: 0.8rem; }
+.isaac-prose pre  { background: #1a1a1a; border: 1px solid #2e2e2e; padding: 0.85rem 1rem; margin-bottom: 0.85rem; overflow-x: auto; }
+.isaac-prose pre code { background: transparent; padding: 0; color: #e8e8e8; }
+.isaac-prose a  { color: #DAA520; text-decoration: underline; }
+.isaac-prose a:hover { color: #F0C040; }
+.isaac-prose hr { border-color: #2e2e2e; margin: 1.5rem 0; }
+.isaac-prose strong { font-weight: 700; color: #e8e8e8; }
+.isaac-prose em { font-style: italic; }
+
+/* ── TipTap editor container ───────────────────────────────────────── */
+.tiptap-editor .ProseMirror { outline: none; min-height: 24rem; }
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #888;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
