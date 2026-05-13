@@ -502,6 +502,8 @@ async def upsert_entries(
             time_taken = parsed.time_taken if parsed else None
         return {
             "daily_run_id": run.id,
+            "version": run.version.value,
+            "sort_type": run.sort_type.value,
             "rank": e.rank,
             "steam_id": e.steam_id,
             "value": e.value,
@@ -523,8 +525,8 @@ async def upsert_entries(
 
     rows = [_row(e) for e in raw_entries]
 
-    # asyncpg caps query parameters at 32767; each row has 18 columns → max 1820 rows/batch
-    BATCH_SIZE = 1800
+    # asyncpg caps query parameters at 32767; each row has 20 columns → max 1638 rows/batch
+    BATCH_SIZE = 1600
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i : i + BATCH_SIZE]
         stmt = pg_insert(LeaderboardEntry).values(batch)
@@ -905,12 +907,12 @@ async def refresh_overall_stats(
     if steam_ids is not None:
         params["steam_ids"] = steam_ids
 
-    # Compute stats without touching steam_player_cache.  The visible CTE only
-    # needs (steam_id, daily_run_id, rank), all covered by ix_le_visible_run_steam.
-    # auto_banned is MATERIALIZED to prevent PostgreSQL from inlining it into the
-    # visible CTE as a self-join on leaderboard_entries (which would be catastrophic
-    # on 66 M rows).  The materialized result is a small hash set (~hundreds of rows)
-    # that the NOT IN check probes in O(1) per row.
+    # Filter directly on denormalized version/sort_type — no JOIN to daily_runs.
+    # ix_le_vs_steam_rank covers (version, sort_type, steam_id, rank) WHERE hidden = false,
+    # enabling a pure index-only scan for the hash aggregation.
+    #
+    # auto_banned is MATERIALIZED so PostgreSQL doesn't inline it into the main
+    # scan (which would create a catastrophic self-join on 66 M rows).
     cursor = await db.execute(text(f"""
         WITH auto_banned AS MATERIALIZED (
             SELECT steam_id
@@ -919,32 +921,25 @@ async def refresh_overall_stats(
             {banned_filter}
             GROUP BY steam_id
             HAVING COUNT(*) >= :ban_threshold
-        ),
-        visible AS (
-            SELECT
-                le.steam_id,
-                ROW_NUMBER() OVER (PARTITION BY le.daily_run_id ORDER BY le.rank) AS rn
-            FROM leaderboard_entries le
-            JOIN daily_runs dr ON le.daily_run_id = dr.id
-            WHERE le.hidden = false
-              AND le.steam_id NOT IN (SELECT steam_id FROM auto_banned)
-              AND dr.version = :version
-              AND dr.sort_type = :sort_type
-              {player_filter}
         )
         INSERT INTO player_overall_stats
             (steam_id, version, sort_type, runs_played, avg_rank, best_rank, wins, updated_at)
         SELECT
-            steam_id,
+            le.steam_id,
             :version,
             :sort_type,
             COUNT(*),
-            AVG(rn),
-            MIN(rn),
-            SUM(CASE WHEN rn = 1 THEN 1 ELSE 0 END),
+            AVG(le.rank),
+            MIN(le.rank),
+            SUM(CASE WHEN le.rank = 1 THEN 1 ELSE 0 END),
             NOW()
-        FROM visible
-        GROUP BY steam_id
+        FROM leaderboard_entries le
+        WHERE le.hidden = false
+          AND le.version = :version
+          AND le.sort_type = :sort_type
+          AND le.steam_id NOT IN (SELECT steam_id FROM auto_banned)
+          {player_filter}
+        GROUP BY le.steam_id
         ON CONFLICT (steam_id, version, sort_type) DO UPDATE SET
             runs_played = EXCLUDED.runs_played,
             avg_rank    = EXCLUDED.avg_rank,
