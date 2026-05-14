@@ -365,3 +365,4 @@ vite.config.ts.timestamp-*
 
 .claude/
 .vscode/
+certs/

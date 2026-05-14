@@ -39,10 +39,26 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
-    ports:
-      - "${PORT:-80}:80"
     depends_on:
       - backend
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - frontend
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
