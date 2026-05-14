@@ -11,7 +11,7 @@ Daily run leaderboards for The Binding of Isaac (all versions).
 
 ## Production deployment
 
-The full stack (Postgres, backend, frontend) runs as three Docker containers.
+The full stack runs as four Docker containers: Postgres, backend, frontend, and Caddy (reverse proxy / TLS termination).
 
 ### 1. Configure
 
@@ -21,41 +21,77 @@ cp .env.example .env
 
 Edit `.env` and fill in the required variables (see [Configuration](#configuration) for the full reference).
 
-### 2. Build and start
+### 2. Obtain a Cloudflare Origin Certificate
+
+The site is designed to sit behind Cloudflare with **Full (Strict)** SSL mode. Caddy terminates TLS using a Cloudflare Origin Certificate rather than Let's Encrypt.
+
+In the Cloudflare dashboard: **SSL/TLS → Origin Server → Create Certificate**. Leave defaults (RSA, 15 years) and copy the certificate and private key into the `certs/` directory:
+
+```bash
+mkdir -p certs
+nano certs/origin.pem   # paste the certificate block
+nano certs/origin.key   # paste the private key block
+chmod 600 certs/origin.key
+```
+
+Then update `Caddyfile` with your actual domain name (replace `yourdomain.com`).
+
+### 3. Build and start
 
 ```bash
 docker compose up -d --build
 ```
 
-This starts all three services. Database migrations run automatically when the backend starts — the app is ready as soon as all containers are healthy.
+All four services start. Database migrations run automatically when the backend starts. Caddy listens on ports 80 and 443 and proxies to the frontend container internally.
 
-### 3. Set the first admin
+### 4. Set the first admin
 
-The first admin must be set from the command line (see [User roles and moderation](#user-roles-and-moderation)):
+The first admin must be set from the command line:
 
 ```bash
 docker compose exec backend python set_role.py <steam_id> admin
 ```
 
-### Redeploying
+The user must have logged in via the site at least once first.
 
-Pull new code and rebuild:
+### Redeploying
 
 ```bash
 docker compose up -d --build
 ```
 
-Migrations are applied automatically on each restart. Postgres data persists in the `pgdata` Docker volume across deploys.
+Migrations are applied automatically on restart. Postgres data persists in the `pgdata` Docker volume across deploys.
 
-### HTTPS
+### Firewall
 
-The frontend container listens on plain HTTP. To serve over HTTPS, put a reverse proxy in front of it — [Caddy](https://caddyserver.com/) is the easiest option as it handles certificate provisioning automatically:
+Restrict port 80 and 443 to Cloudflare's IP ranges so the origin is only reachable through Cloudflare:
 
+```bash
+for ip in $(curl -s https://www.cloudflare.com/ips-v4); do ufw allow from $ip to any port 80; done
+for ip in $(curl -s https://www.cloudflare.com/ips-v6); do ufw allow from $ip to any port 80; done
+for ip in $(curl -s https://www.cloudflare.com/ips-v4); do ufw allow from $ip to any port 443; done
+for ip in $(curl -s https://www.cloudflare.com/ips-v6); do ufw allow from $ip to any port 443; done
+ufw allow 22
+ufw enable
 ```
-yourdomain.com {
-    reverse_proxy localhost:80
-}
-```
+
+---
+
+## CI/CD
+
+A GitHub Actions workflow is included at `.github/workflows/deploy.yml`. On every push to `main` it:
+
+1. Builds the frontend and checks for TypeScript errors
+2. Installs backend dependencies and checks all Python files for syntax errors
+3. If both pass, SSHs into the VPS and runs `git pull && docker compose up -d --build`
+
+Add three secrets to the GitHub repository (Settings → Secrets → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `VPS_HOST` | IP or hostname of your VPS |
+| `VPS_USER` | SSH username |
+| `VPS_SSH_KEY` | Private key whose public key is in `~/.ssh/authorized_keys` on the VPS |
 
 ---
 
@@ -100,28 +136,20 @@ Open <http://localhost:5173>.
 
 ### Docker (production)
 
-Config is read from the root `.env` file by Docker Compose. Copy `.env.example` as a starting point:
-
-```bash
-cp .env.example .env
-```
+Config is read from the root `.env` file by Docker Compose. Copy `.env.example` as a starting point.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `APP_URL` | Yes | Public URL of the site — used for Steam OpenID redirects. |
 | `SESSION_SECRET` | Yes | Long random string used to sign JWTs. Generate with: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `DOMAIN` | Yes | Your domain name — used by Caddy for the HTTPS virtual host (e.g. `yourdomain.com`). |
 | `STEAM_API_KEY` | Recommended | Resolves player names and avatars. Without it, entries show raw Steam IDs. Get one at <https://steamcommunity.com/dev/apikey> |
 | `DB_PASSWORD` | No | Postgres password (default: `postgres` — change in production). |
-| `PORT` | No | Host port to expose the app on (default: `80`). |
 | `*_PATTERN` | No | Regex patterns for matching Steam leaderboard names to versions. Leave blank to use built-in defaults. See [Configuring version detection](#configuring-version-detection). |
 
 ### Local development
 
-Config is read from `backend/.env`. Copy `backend/.env.example` as a starting point:
-
-```bash
-cp backend/.env.example backend/.env
-```
+Config is read from `backend/.env`. Copy `backend/.env.example` as a starting point.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -155,77 +183,81 @@ Entries dated before each version's official launch are automatically discarded 
 | Repentance | 2021-03-31 |
 | Repentance+ (Solo & Coop) | 2024-11-19 |
 
-### Manual scrape endpoints
+### Authentication for scrape endpoints
 
-The backend also exposes scrape endpoints for on-demand use. Call them with `curl` or any HTTP client.
+All scrape and admin endpoints require an admin account. Authenticate with either:
 
-In Docker, the backend is not exposed on the host by default; use `docker compose exec`:
-
-```bash
-docker compose exec backend curl -s -X POST http://localhost:8000/api/scrape/today
-```
-
-### Today's runs
+- **Browser session** (JWT): log in to the site as an admin and use the browser session normally.
+- **API key** (for curl/scripts): visit the Admin panel to get your API key, then pass it as a header:
 
 ```bash
-curl -X POST http://localhost:8000/api/scrape/today
+curl -X POST https://yourdomain.com/api/scrape/today \
+  -H "X-API-Key: gbt_your_key_here"
 ```
+
+API keys are per-admin, expire after 1 hour, and can be regenerated from the Admin panel. A new key immediately invalidates the previous one.
 
 ### Seed all historical data
 
 ```bash
 # All history since Isaac launch (slow — may take hours)
-curl -X POST "http://localhost:8000/api/scrape/seed"
+curl -X POST "https://yourdomain.com/api/scrape/seed" \
+  -H "X-API-Key: gbt_your_key_here"
 
 # Limit to a specific start date
-curl -X POST "http://localhost:8000/api/scrape/seed?from_date=2024-01-01"
+curl -X POST "https://yourdomain.com/api/scrape/seed?from_date=2024-01-01" \
+  -H "X-API-Key: gbt_your_key_here"
 ```
 
-The seed scrape is split into two phases to avoid slow Steam API retries stalling
-the leaderboard fetch:
+The seed runs in three phases:
 
-1. **Phase 1** — fetches all leaderboard entries and stores them
-2. **Phase 2** — finds every Steam ID not yet in the player name cache and resolves
-   names via the Steam API
+1. **Entries** — fetches all leaderboard entries, skipping boards already in the database
+2. **Names** — resolves player names for all Steam IDs not yet in the name cache
+3. **Stats** — rebuilds the overall leaderboard stats cache
 
-### Backfill player names (standalone)
+If interrupted, calling the endpoint again resumes from the phase that was in progress. The current phase is stored in the database and cleared automatically when seeding completes.
 
-If the Steam API was unavailable during seeding, or you want to re-run just the
-name resolution pass:
+### Other manual endpoints
 
 ```bash
-curl -X POST http://localhost:8000/api/scrape/backfill-names
-```
+# Scrape today's runs
+curl -X POST https://yourdomain.com/api/scrape/today \
+  -H "X-API-Key: gbt_your_key_here"
 
-This is safe to run at any time — it only touches Steam IDs that are absent from
-the player name cache or have a NULL name there.
+# Resolve missing player names without re-scraping
+curl -X POST https://yourdomain.com/api/scrape/backfill-names \
+  -H "X-API-Key: gbt_your_key_here"
+
+# Rebuild overall stats cache for all versions/sort types
+curl -X POST https://yourdomain.com/api/scrape/refresh-stats \
+  -H "X-API-Key: gbt_your_key_here"
+```
 
 ### Suggested cron job (optional)
 
-If the server is not running continuously, a cron job can supplement the built-in scheduler to ensure today's data is captured. Use a time that avoids 02:00 UTC, which the built-in scheduler already uses for its full stats refresh:
+If the server is not running continuously, a cron job can supplement the built-in scheduler. Use a time that avoids 02:00 UTC:
 
 ```cron
 # Scrape today's leaderboards every day at 03:00 UTC
-0 3 * * * curl -s -X POST http://localhost:8000/api/scrape/today >> /var/log/gbtwopointoh.log 2>&1
+0 3 * * * curl -s -X POST https://yourdomain.com/api/scrape/today -H "X-API-Key: gbt_your_key_here" >> /var/log/gbtwopointoh.log 2>&1
 ```
 
 ---
 
 ## Configuring version detection
 
-Isaac daily run leaderboards on Steam follow a naming convention that may differ
-from the defaults. After starting the backend:
+Isaac daily run leaderboards on Steam follow a naming convention that may differ from the defaults. After starting the backend:
 
 1. Call the discovery endpoint to see a sample of detected leaderboards:
 
    ```bash
-   curl http://localhost:8000/api/admin/leaderboard-discovery?sample_size=50
+   curl -H "X-API-Key: gbt_your_key_here" \
+     "https://yourdomain.com/api/admin/leaderboard-discovery?sample_size=50"
    ```
 
-2. Inspect the `name` field of returned leaderboards and note which patterns
-   correspond to each version.
+2. Inspect the `name` field of returned leaderboards and note which patterns correspond to each version.
 
-3. Update the `*_PATTERN` variables in `backend/.env` and restart the server.
+3. Update the `*_PATTERN` variables in `.env` and redeploy.
 
 ---
 
@@ -243,24 +275,24 @@ There are two privileged roles: `admin` and `moderator`. Admins can do everythin
 | Grant / revoke moderator role | — | ✓ |
 | View and respond to user feedback | — | ✓ |
 | Reopen closed feedback threads | — | ✓ |
-| Admin panel | — | ✓ |
+| Admin panel (including API key) | — | ✓ |
 
 ### Assigning the first admin via command line
 
-Since the admin panel requires an existing admin to manage roles, the first admin must be set directly from the command line. Run this from the `backend/` directory with the virtualenv active:
+Since the admin panel requires an existing admin to manage roles, the first admin must be set directly from the command line:
 
 ```bash
-python set_role.py <steam_id> admin
+docker compose exec backend python set_role.py <steam_id> admin
 ```
 
 Other valid roles:
 
 ```bash
-python set_role.py <steam_id> moderator   # grant moderator
-python set_role.py <steam_id> none        # remove any role
+docker compose exec backend python set_role.py <steam_id> moderator   # grant moderator
+docker compose exec backend python set_role.py <steam_id> none        # remove any role
 ```
 
-The user must have logged in at least once before this command will work (their Steam ID must exist in the `users` table). Log in via the site first, then run the command.
+The user must have logged in at least once before this command will work (their Steam ID must exist in the `users` table).
 
 ### Managing roles via the admin panel
 
@@ -354,6 +386,8 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/mod/players/search` | Search all known players |
 | `POST` | `/api/mod/users/{steam_id}/moderator` | Grant moderator role |
 | `DELETE` | `/api/mod/users/{steam_id}/moderator` | Revoke moderator role |
+| `GET` | `/api/admin/api-key` | Get current API key (auto-generates if expired) |
+| `POST` | `/api/admin/api-key/regenerate` | Issue a new API key, invalidating the current one |
 
 ### Feedback endpoints (any logged-in user)
 
@@ -379,12 +413,14 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/about` | Fetch about page markdown content (public) |
 | `PUT` | `/api/about` | Update about page content (admin only) |
 
-### Scrape / admin endpoints
+### Scrape / admin endpoints (admin only)
+
+All scrape endpoints require admin authentication — pass `Authorization: Bearer <jwt>` or `X-API-Key: <key>`.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/scrape/today` | Scrape today's runs for all versions |
-| `POST` | `/api/scrape/seed` | Seed all historical data (two-phase: entries then names) |
+| `POST` | `/api/scrape/seed` | Seed all historical data (resumable — see [Seed all historical data](#seed-all-historical-data)) |
 | `POST` | `/api/scrape/backfill-names` | Resolve missing player names without re-scraping |
 | `POST` | `/api/scrape/backfill-rp-time` | Populate `time_taken` for Repentance+ time-sort entries that have NULL (safe to re-run) |
 | `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types |
