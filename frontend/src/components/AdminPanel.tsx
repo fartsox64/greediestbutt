@@ -105,11 +105,13 @@ function ScheduledJobsSection() {
 
 function ApiKeySection() {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["admin-api-key"],
     queryFn: fetchApiKey,
     refetchInterval: 30_000,
+    enabled: open,
   });
 
   const handleRegenerate = async () => {
@@ -130,43 +132,53 @@ function ApiKeySection() {
 
   return (
     <div className="space-y-3">
-      <h2 className="font-title text-isaac-accent text-sm tracking-wide uppercase">API Key</h2>
-      <div className="border border-isaac-border p-4 space-y-3">
-        {isLoading ? (
-          <div className="text-isaac-muted text-sm animate-pulse">Loading…</div>
-        ) : data ? (
-          <>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-black/30 text-green-300 text-xs px-3 py-2 font-mono break-all">
-                {data.api_key}
-              </code>
-              <button
-                onClick={handleCopy}
-                className="text-xs border border-isaac-border px-3 py-2 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors whitespace-nowrap"
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-isaac-muted">
-                Expires in {expiresIn} minute{expiresIn !== 1 ? "s" : ""}
-              </span>
-              <button
-                onClick={handleRegenerate}
-                className="text-xs border border-isaac-border px-3 py-1.5 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors"
-              >
-                Regenerate
-              </button>
-            </div>
-            <div className="text-xs text-isaac-muted space-y-1">
-              <div className="font-mono bg-black/30 px-3 py-2 text-green-300/70 break-all">
-                curl -X POST https://yourdomain.com/api/scrape/today \<br />
-                {"  "}-H "X-API-Key: {data.api_key}"
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between w-full group"
+      >
+        <h2 className="font-title text-isaac-accent text-sm tracking-wide uppercase">API Key</h2>
+        <span className="text-xs text-isaac-muted group-hover:text-isaac-text transition-colors">
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {open && (
+        <div className="border border-isaac-border p-4 space-y-3">
+          {isLoading ? (
+            <div className="text-isaac-muted text-sm animate-pulse">Loading…</div>
+          ) : data ? (
+            <>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-black/30 text-green-300 text-xs px-3 py-2 font-mono break-all">
+                  {data.api_key}
+                </code>
+                <button
+                  onClick={handleCopy}
+                  className="text-xs border border-isaac-border px-3 py-2 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors whitespace-nowrap"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
               </div>
-            </div>
-          </>
-        ) : null}
-      </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-isaac-muted">
+                  Expires in {expiresIn} minute{expiresIn !== 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={handleRegenerate}
+                  className="text-xs border border-isaac-border px-3 py-1.5 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors"
+                >
+                  Regenerate
+                </button>
+              </div>
+              <div className="text-xs text-isaac-muted space-y-1">
+                <div className="font-mono bg-black/30 px-3 py-2 text-green-300/70 break-all">
+                  curl -X POST https://yourdomain.com/api/scrape/today \<br />
+                  {"  "}-H "X-API-Key: {data.api_key}"
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -196,11 +208,11 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-8">
-      {/* Scheduled jobs */}
-      <ScheduledJobsSection />
-
       {/* API key */}
       <ApiKeySection />
+
+      {/* Scheduled jobs */}
+      <ScheduledJobsSection />
 
       {/* Moderators list */}
       <div className="space-y-3">
