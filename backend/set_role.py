@@ -12,7 +12,7 @@ import sys
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models import User
+from app.models import SteamPlayerCache, User
 
 VALID_ROLES = {"admin", "moderator", "none"}
 
@@ -28,8 +28,9 @@ async def main(steam_id: int, role: str | None) -> None:
         user.role = role
         await db.commit()
 
+        cache = await db.scalar(select(SteamPlayerCache).where(SteamPlayerCache.steam_id == steam_id))
         display = role if role else "none (cleared)"
-        print(f"Set {user.player_name or steam_id} ({steam_id}) role → {display}")
+        print(f"Set {cache.player_name if cache else steam_id} ({steam_id}) role → {display}")
 
 
 if __name__ == "__main__":
