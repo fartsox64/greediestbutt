@@ -1,4 +1,7 @@
+import asyncio
+import logging
 import math
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -9,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ..auth import get_current_user
-from ..database import get_db
+from ..database import AsyncSessionLocal, get_db
 from ..models import DailyRun, Follow, GameVersion, LeaderboardEntry, PlayerOverallStats, SortType, SteamPlayerCache, User, VERSION_ORDER
 from .filters import visible_entries_filter
 from ..schemas import (
@@ -36,10 +39,13 @@ from ..scraper.steam import (
     discover_leaderboards,
     refresh_overall_stats,
     resolve_player_info,
+    run_id_var,
     scrape_today,
     seed_all,
     upsert_player_cache,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -635,50 +641,59 @@ async def scrape_today_endpoint(
     )
 
 
-@router.post("/scrape/seed", response_model=ScrapeResult)
+@router.post("/scrape/seed", status_code=202)
 async def seed_endpoint(
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
-    db: AsyncSession = Depends(get_db),
     _admin=Depends(_require_admin),
 ):
-    """Seed the database with all historical daily run data.
+    """Start a background seed of all historical daily run data.
 
-    WARNING: this fetches data for every daily run since launch and may take
-    a very long time (hours). Use from_date and to_date to limit the range.
+    Returns immediately with a run_id. Track progress in server logs by
+    filtering for that ID. The seed is resumable — call again to continue
+    from where it left off if interrupted.
     """
-    stats = await seed_all(db, from_date=from_date, to_date=to_date)
-    _cache_invalidate_prefix("dates:")
-    _cache_invalidate_prefix("leaderboard:")
-    _cache_invalidate_prefix("overall:")
-    _cache_invalidate_prefix("profile:")
-    _cache_invalidate_prefix("player:")
-    _cache_invalidate_prefix("stats:")
-    return ScrapeResult(
-        runs_created=stats["runs_created"],
-        runs_updated=stats["runs_updated"],
-        entries_upserted=stats["entries_upserted"],
-        message=(
-            f"Seeded {stats['runs_created']} new runs, "
-            f"updated {stats['runs_updated']}, "
-            f"upserted {stats['entries_upserted']} entries."
-        ),
-    )
+    run_id = str(uuid.uuid4())
+
+    async def _run() -> None:
+        run_id_var.set(run_id)
+        log.info("Seed started (run_id=%s)", run_id)
+        try:
+            async with AsyncSessionLocal() as db:
+                await seed_all(db, from_date=from_date, to_date=to_date)
+            for prefix in ("dates:", "leaderboard:", "overall:", "profile:", "player:", "stats:"):
+                _cache_invalidate_prefix(prefix)
+            log.info("Seed complete (run_id=%s)", run_id)
+        except Exception:
+            log.exception("Seed failed (run_id=%s)", run_id)
+
+    asyncio.create_task(_run())
+    return {"run_id": run_id, "message": f"Seed started. Filter logs for run_id={run_id[:8]} to follow progress."}
 
 
-@router.post("/scrape/backfill-names")
+@router.post("/scrape/backfill-names", status_code=202)
 async def backfill_names_endpoint(
-    db: AsyncSession = Depends(get_db),
     _admin=Depends(_require_admin),
 ):
-    """Resolve player names for all leaderboard entries currently missing them.
+    """Start a background pass to resolve player names for all entries missing them.
 
-    Useful after a seed run, or to recover names that were missed due to API
-    failures. Checks the DB for existing names first, then calls the Steam API
-    only for players still unresolved.
+    Returns immediately with a run_id. Track progress in server logs by
+    filtering for that ID.
     """
-    players_named = await backfill_player_names(db)
-    return {"players_named": players_named}
+    run_id = str(uuid.uuid4())
+
+    async def _run() -> None:
+        run_id_var.set(run_id)
+        log.info("Backfill-names started (run_id=%s)", run_id)
+        try:
+            async with AsyncSessionLocal() as db:
+                await backfill_player_names(db)
+            log.info("Backfill-names complete (run_id=%s)", run_id)
+        except Exception:
+            log.exception("Backfill-names failed (run_id=%s)", run_id)
+
+    asyncio.create_task(_run())
+    return {"run_id": run_id, "message": f"Backfill started. Filter logs for run_id={run_id[:8]} to follow progress."}
 
 
 @router.post("/scrape/backfill-packed-nulls")

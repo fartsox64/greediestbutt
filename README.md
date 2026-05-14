@@ -209,13 +209,19 @@ curl -X POST "https://yourdomain.com/api/scrape/seed?from_date=2024-01-01" \
   -H "X-API-Key: gbt_your_key_here"
 ```
 
-The seed runs in three phases:
+The endpoint returns immediately with a `run_id`. The seed runs in the background in three phases:
 
 1. **Entries** — fetches all leaderboard entries, skipping boards already in the database
 2. **Names** — resolves player names for all Steam IDs not yet in the name cache
 3. **Stats** — rebuilds the overall leaderboard stats cache
 
 If interrupted, calling the endpoint again resumes from the phase that was in progress. The current phase is stored in the database and cleared automatically when seeding completes.
+
+Track progress by filtering server logs for the run ID:
+
+```bash
+docker compose logs -f backend | grep <first-8-chars-of-run-id>
+```
 
 ### Other manual endpoints
 
@@ -224,7 +230,7 @@ If interrupted, calling the endpoint again resumes from the phase that was in pr
 curl -X POST https://yourdomain.com/api/scrape/today \
   -H "X-API-Key: gbt_your_key_here"
 
-# Resolve missing player names without re-scraping
+# Resolve missing player names without re-scraping (runs in background, returns run_id)
 curl -X POST https://yourdomain.com/api/scrape/backfill-names \
   -H "X-API-Key: gbt_your_key_here"
 
@@ -420,8 +426,8 @@ All scrape endpoints require admin authentication — pass `Authorization: Beare
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/scrape/today` | Scrape today's runs for all versions |
-| `POST` | `/api/scrape/seed` | Seed all historical data (resumable — see [Seed all historical data](#seed-all-historical-data)) |
-| `POST` | `/api/scrape/backfill-names` | Resolve missing player names without re-scraping |
+| `POST` | `/api/scrape/seed` | Start background seed of all historical data — returns 202 with `run_id` (resumable) |
+| `POST` | `/api/scrape/backfill-names` | Start background player name resolution — returns 202 with `run_id` |
 | `POST` | `/api/scrape/backfill-rp-time` | Populate `time_taken` for Repentance+ time-sort entries that have NULL (safe to re-run) |
 | `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types |
 | `GET` | `/api/admin/leaderboard-discovery` | Inspect raw Steam leaderboard names |

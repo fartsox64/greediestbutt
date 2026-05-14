@@ -16,6 +16,7 @@ Steam Web API (API key required) for player names:
 """
 
 import asyncio
+import contextvars
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -33,7 +34,17 @@ from ..models import DailyRun, GameVersion, LeaderboardEntry, PlayerOverallStats
 
 _BoardSignature = tuple[GameVersion, SortType]
 
-log = logging.getLogger(__name__)
+# Context variable set by the caller to tag all log lines within a run.
+run_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("scrape_run_id", default=None)
+
+
+class _RunIdAdapter(logging.LoggerAdapter):
+    def process(self, msg: str, kwargs: dict) -> tuple[str, dict]:
+        run_id = run_id_var.get()
+        return (f"[{run_id[:8]}] {msg}" if run_id else msg), kwargs
+
+
+log = _RunIdAdapter(logging.getLogger(__name__), {})
 
 STEAM_COMMUNITY_BASE = "https://steamcommunity.com/stats"
 STEAM_API_BASE = "https://api.steampowered.com"
