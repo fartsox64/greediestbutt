@@ -1,5 +1,6 @@
 import type { OverallEntry, User } from "../types";
 import { FollowButton } from "./FollowButton";
+import { safeHttpsUrl } from "../utils";
 
 interface Props {
   entries: OverallEntry[];
@@ -90,6 +91,7 @@ function OverallRow({
   const rowClass = idx % 2 === 0 ? "bg-isaac-surface" : "bg-transparent";
   const playerLabel = entry.player_name ?? `[${entry.steam_id}]`;
   const isSelf = currentUser?.steam_id === entry.steam_id;
+  const avatarSrc = safeHttpsUrl(avatarUrl);
 
   return (
     <tr className={`${rowClass} border-b border-isaac-border hover:bg-isaac-border transition-colors`}>
@@ -102,7 +104,7 @@ function OverallRow({
             onClick={() => onPlayerClick(entry.steam_id, entry.player_name)}
             className="flex items-center gap-2 text-isaac-text hover:text-isaac-accent transition-colors text-left min-w-0"
           >
-            {avatarUrl?.startsWith("https://") && <img src={avatarUrl} className="w-6 h-6 flex-shrink-0" alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+            {avatarSrc && <img src={avatarSrc} className="w-6 h-6 flex-shrink-0" alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
             <span className="truncate">{playerLabel}</span>
           </button>
           {currentUser && !isSelf && (

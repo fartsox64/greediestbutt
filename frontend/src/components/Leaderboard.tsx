@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { LeaderboardEntry, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
+import { safeHttpsUrl } from "../utils";
 
 interface Props {
   entries: LeaderboardEntry[];
@@ -166,6 +167,7 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
   const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
   const isSelf = currentUser?.steam_id === entry.steam_id;
   const canReport = !!currentUser && !currentUser.role && !isSelf;
+  const avatarSrc = safeHttpsUrl(avatarUrl);
 
   return (
     <>
@@ -184,7 +186,7 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
               onClick={() => onPlayerClick(entry.steam_id)}
               className="flex items-center gap-2 hover:text-isaac-accent transition-colors text-left min-w-0"
             >
-              {avatarUrl?.startsWith("https://") && <img src={avatarUrl} className="w-6 h-6 flex-shrink-0" alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+              {avatarSrc && <img src={avatarSrc} className="w-6 h-6 flex-shrink-0" alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
               <span className="truncate">{playerLabel}</span>
               {entry.goal != null && entry.goal < 2 && (
                 <span title="Died during run" className="text-red-500 flex-shrink-0">💀</span>

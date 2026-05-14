@@ -41,6 +41,7 @@ import { FeedbackModal } from "./components/FeedbackModal";
 import { AboutPage } from "./components/AboutPage";
 import { DailyCountsPage } from "./components/DailyCountsPage";
 import type { GameVersion, SortType } from "./types";
+import { safeHttpsUrl } from "./utils";
 
 type View = "daily" | "overall" | "profile" | "mod" | "admin" | "about" | "stats";
 
@@ -381,6 +382,7 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  const userAvatarSrc = safeHttpsUrl(user?.avatar_url);
 
   return (
     <div className="min-h-screen bg-isaac-bg text-isaac-text">
@@ -478,9 +480,7 @@ export default function App() {
                   onClick={() => handleProfileClick(user.steam_id)}
                   className="flex items-center gap-2 text-isaac-muted hover:text-isaac-text transition-colors"
                 >
-                  {user.avatar_url?.startsWith("https://") && (
-                    <img src={user.avatar_url} className="w-6 h-6" alt="" />
-                  )}
+                  {userAvatarSrc && <img src={userAvatarSrc} className="w-6 h-6" alt="" />}
                   <span className="max-w-[120px] truncate">
                     {user.player_name ?? `[${user.steam_id}]`}
                   </span>
