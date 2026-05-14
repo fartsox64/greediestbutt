@@ -207,6 +207,15 @@ class PlayerOverallStats(Base):
     )
 
 
+class AdminApiKey(Base):
+    __tablename__ = "admin_api_keys"
+
+    steam_id   = Column(BigInteger, ForeignKey("users.steam_id", ondelete="CASCADE"), primary_key=True)
+    api_key    = Column(String(68), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class SiteSetting(Base):
     __tablename__ = "site_settings"
 

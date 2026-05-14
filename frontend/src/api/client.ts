@@ -320,3 +320,20 @@ export function updateAbout(content: string): Promise<void> {
 export function fetchDailyCounts(): Promise<DailyCountsResponse> {
   return apiFetch<DailyCountsResponse>(`${BASE}/stats/daily-counts`);
 }
+
+// ---------------------------------------------------------------------------
+// Admin API key
+// ---------------------------------------------------------------------------
+
+export interface ApiKeyResponse {
+  api_key: string;
+  expires_at: string;
+}
+
+export function fetchApiKey(): Promise<ApiKeyResponse> {
+  return apiFetch<ApiKeyResponse>(`${BASE}/admin/api-key`);
+}
+
+export function regenerateApiKey(): Promise<ApiKeyResponse> {
+  return apiFetch<ApiKeyResponse>(`${BASE}/admin/api-key/regenerate`, undefined, { method: "POST" });
+}

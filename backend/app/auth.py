@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,11 +91,33 @@ def _decode_token(token: str) -> int | None:
 # ---------------------------------------------------------------------------
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns AuthenticatedUser with name/avatar from steam_player_cache, or None if unauthenticated."""
-    from .models import SteamPlayerCache, User
+    """Returns AuthenticatedUser with name/avatar from steam_player_cache, or None if unauthenticated.
+
+    Accepts either a Bearer JWT or an X-API-Key header (admin API keys only).
+    """
+    from .models import AdminApiKey, SteamPlayerCache, User
+
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(User.steam_id, User.role, SteamPlayerCache.player_name, SteamPlayerCache.avatar_url)
+            .join(AdminApiKey, AdminApiKey.steam_id == User.steam_id)
+            .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == User.steam_id)
+            .where(AdminApiKey.api_key == api_key, AdminApiKey.expires_at > now)
+        )
+        row = result.first()
+        if row is not None:
+            return AuthenticatedUser(
+                steam_id=row.steam_id,
+                role=row.role,
+                player_name=row.player_name,
+                avatar_url=row.avatar_url,
+            )
 
     if credentials is None:
         return None

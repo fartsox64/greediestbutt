@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.about_routes import router as about_router
+from .api.admin_key_routes import router as admin_key_router
 from .api.auth_routes import router as auth_router
 from .api.feedback_routes import router as feedback_router
 from .api.mod_routes import router as mod_router
@@ -91,6 +92,7 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(auth_router)
+app.include_router(admin_key_router)
 app.include_router(mod_router)
 app.include_router(report_router)
 app.include_router(feedback_router)
