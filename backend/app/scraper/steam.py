@@ -735,22 +735,34 @@ async def scrape_date_range(
     return stats
 
 
-async def backfill_player_names(db: AsyncSession) -> int:
+async def backfill_player_names(db: AsyncSession, limit: int | None = None) -> int:
     """Fill in player_name in steam_player_cache for all players missing it.
+
+    Players are ordered by their most recent run date so newly active players
+    are resolved first. Pass ``limit`` to cap the number of players resolved
+    (useful for scheduled incremental runs).
 
     Calls the Steam API in chunks of 100 (the API limit). Flushes collected
     data to the DB whenever the buffer reaches DB_BATCH entries, and also
     flushes during any retry backoff so the wait time is used productively.
     Returns the number of players whose names were resolved.
     """
-    result = await db.execute(
-        select(LeaderboardEntry.steam_id)
+    q = (
+        select(
+            LeaderboardEntry.steam_id,
+            func.max(DailyRun.date).label("latest_date"),
+        )
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
         .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
         .where(
             (SteamPlayerCache.steam_id.is_(None)) | (SteamPlayerCache.player_name.is_(None))
         )
-        .distinct()
+        .group_by(LeaderboardEntry.steam_id)
+        .order_by(func.max(DailyRun.date).desc())
     )
+    if limit is not None:
+        q = q.limit(limit)
+    result = await db.execute(q)
     missing_ids = [row[0] for row in result]
 
     if not missing_ids:

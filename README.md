@@ -165,9 +165,10 @@ Config is read from `backend/.env`. Copy `backend/.env.example` as a starting po
 
 ### Built-in scheduler
 
-The backend runs two scheduled jobs automatically:
+The backend runs three scheduled jobs automatically:
 
 - **Every 10 minutes** — scrapes today's and yesterday's leaderboards for all versions and refreshes overall-leaderboard stats for any players whose scores changed.
+- **Every hour** — resolves up to 30,000 player names that are missing from the cache, prioritising players with the most recent runs.
 - **Daily at 02:00 UTC** — runs a full overall-leaderboard stats refresh across all versions and sort types, catching any drift that the incremental updates may have missed.
 
 No external cron job is required for normal operation. The scheduler starts with the server and logs each run.
@@ -427,7 +428,7 @@ All scrape endpoints require admin authentication — pass `Authorization: Beare
 |--------|------|-------------|
 | `POST` | `/api/scrape/today` | Scrape today's runs for all versions |
 | `POST` | `/api/scrape/seed` | Start background seed of all historical data — returns 202 with `run_id` (resumable) |
-| `POST` | `/api/scrape/backfill-names` | Start background player name resolution — returns 202 with `run_id` |
+| `POST` | `/api/scrape/backfill-names` | Start background player name resolution (all unresolved players, no limit) — returns 202 with `run_id` |
 | `POST` | `/api/scrape/backfill-rp-time` | Populate `time_taken` for Repentance+ time-sort entries that have NULL (safe to re-run) |
 | `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types |
 | `GET` | `/api/admin/leaderboard-discovery` | Inspect raw Steam leaderboard names |

@@ -14,7 +14,7 @@ from .api.report_routes import router as report_router
 from .api.routes import router
 from .config import settings
 from .database import AsyncSessionLocal
-from .scraper.steam import refresh_overall_stats, scrape_recent
+from .scraper.steam import backfill_player_names, refresh_overall_stats, scrape_recent
 from .models import GameVersion, SortType
 
 log = logging.getLogger(__name__)
@@ -34,6 +34,16 @@ async def _scrape_job() -> None:
         )
     except Exception:
         log.exception("Scheduled scrape failed")
+
+
+async def _backfill_names_job() -> None:
+    log.info("Scheduled name backfill: up to 30,000 players")
+    try:
+        async with AsyncSessionLocal() as db:
+            resolved = await backfill_player_names(db, limit=30_000)
+        log.info("Scheduled name backfill complete — %d players resolved", resolved)
+    except Exception:
+        log.exception("Scheduled name backfill failed")
 
 
 async def _full_stats_refresh_job() -> None:
@@ -61,6 +71,14 @@ async def lifespan(_: FastAPI):
         coalesce=True,         # skip missed firings if the server was down
     )
     scheduler.add_job(
+        _backfill_names_job,
+        trigger="interval",
+        hours=1,
+        id="backfill_names",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
         _full_stats_refresh_job,
         trigger="cron",
         hour=2,
@@ -70,7 +88,7 @@ async def lifespan(_: FastAPI):
         coalesce=True,
     )
     scheduler.start()
-    log.info("Scheduler started — scraping every 10 minutes, full stats refresh daily at 02:00")
+    log.info("Scheduler started — scraping every 10 minutes, name backfill every hour, full stats refresh daily at 02:00")
     yield
     scheduler.shutdown(wait=False)
     log.info("Scheduler stopped")
