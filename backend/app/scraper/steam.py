@@ -24,12 +24,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..models import DailyRun, GameVersion, LeaderboardEntry, PlayerOverallStats, SortType, SteamPlayerCache
+from ..models import DailyRun, GameVersion, LeaderboardEntry, PlayerOverallStats, SiteSetting, SortType, SteamPlayerCache
 
 _BoardSignature = tuple[GameVersion, SortType]
 
@@ -557,11 +557,31 @@ async def upsert_entries(
 # High-level scrape operations
 # ---------------------------------------------------------------------------
 
+_SEED_PHASE_KEY = "seed_phase"
+_SEED_START_KEY = "seed_start_date"
+_SEED_END_KEY   = "seed_end_date"
+
+
+async def _set_setting(db: AsyncSession, key: str, value: str) -> None:
+    stmt = pg_insert(SiteSetting).values(key=key, value=value)
+    stmt = stmt.on_conflict_do_update(index_elements=["key"], set_={"value": stmt.excluded.value})
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def _clear_seed_progress(db: AsyncSession) -> None:
+    await db.execute(delete(SiteSetting).where(
+        SiteSetting.key.in_([_SEED_PHASE_KEY, _SEED_START_KEY, _SEED_END_KEY])
+    ))
+    await db.commit()
+
+
 async def scrape_date_range(
     db: AsyncSession,
     start_date: date | None = None,
     end_date: date | None = None,
     skip_player_info: bool = False,
+    skip_existing: bool = False,
 ) -> dict:
     """
     Scrape daily run leaderboards within an optional date range.
@@ -610,7 +630,18 @@ async def scrape_date_range(
             existing = await db.execute(
                 select(DailyRun).where(DailyRun.steam_leaderboard_id == board.steam_id)
             )
-            is_new = existing.scalar_one_or_none() is None
+            existing_run = existing.scalar_one_or_none()
+            is_new = existing_run is None
+
+            if skip_existing and existing_run is not None:
+                has_entries = await db.scalar(
+                    select(func.count()).select_from(LeaderboardEntry).where(
+                        LeaderboardEntry.daily_run_id == existing_run.id
+                    )
+                )
+                if has_entries:
+                    log.debug("Skipping %s %s %s (already scraped)", run_date, version.value, sort_type.value)
+                    continue
 
             run = await upsert_daily_run(db, board, run_date, version, sort_type)
 
@@ -802,20 +833,49 @@ async def scrape_recent(db: AsyncSession) -> dict:
 async def seed_all(db: AsyncSession, from_date: date | None = None, to_date: date | None = None) -> dict:
     """Seed the database with all historical daily run data.
 
-    Scrapes all entries first without player name lookups, then resolves
-    names in a single pass at the end — much faster than resolving inline.
-    Set from_date/to_date to limit the range; defaults to SCRAPE_MIN_DATE–today.
+    Resumable: if interrupted, calling again resumes from where it left off.
+    Progress is stored in site_settings under seed_phase/seed_start_date/seed_end_date.
+    Pass from_date/to_date on the first call to limit the range; they are ignored on resume.
     """
-    start = from_date or SCRAPE_MIN_DATE
-    end = to_date or date.today()
-    log.info("Seeding data from %s to %s (player names deferred)", start, end)
-    stats = await scrape_date_range(db, start_date=start, end_date=end, skip_player_info=True)
-    log.info("Scrape complete; backfilling player names…")
-    stats["players_named"] = await backfill_player_names(db)
-    log.info("Refreshing overall stats cache for all version/sort combinations…")
-    for v in GameVersion:
-        for st in SortType:
-            await refresh_overall_stats(db, v, st)
+    phase_row  = await db.scalar(select(SiteSetting).where(SiteSetting.key == _SEED_PHASE_KEY))
+    start_row  = await db.scalar(select(SiteSetting).where(SiteSetting.key == _SEED_START_KEY))
+    end_row    = await db.scalar(select(SiteSetting).where(SiteSetting.key == _SEED_END_KEY))
+
+    if phase_row is not None:
+        phase = phase_row.value
+        start = date.fromisoformat(start_row.value) if start_row else (from_date or SCRAPE_MIN_DATE)
+        end   = date.fromisoformat(end_row.value)   if end_row   else (to_date   or date.today())
+        log.info("Resuming seed at phase '%s', range %s to %s", phase, start, end)
+    else:
+        phase = "entries"
+        start = from_date or SCRAPE_MIN_DATE
+        end   = to_date   or date.today()
+        await _set_setting(db, _SEED_PHASE_KEY, phase)
+        await _set_setting(db, _SEED_START_KEY, str(start))
+        await _set_setting(db, _SEED_END_KEY,   str(end))
+        log.info("Seeding data from %s to %s", start, end)
+
+    stats: dict = {"runs_created": 0, "runs_updated": 0, "entries_upserted": 0, "players_named": 0}
+
+    if phase == "entries":
+        s = await scrape_date_range(db, start_date=start, end_date=end, skip_player_info=True, skip_existing=True)
+        stats.update(s)
+        phase = "names"
+        await _set_setting(db, _SEED_PHASE_KEY, phase)
+
+    if phase == "names":
+        log.info("Backfilling player names…")
+        stats["players_named"] = await backfill_player_names(db)
+        phase = "stats"
+        await _set_setting(db, _SEED_PHASE_KEY, phase)
+
+    if phase == "stats":
+        log.info("Refreshing overall stats cache for all version/sort combinations…")
+        for v in GameVersion:
+            for st in SortType:
+                await refresh_overall_stats(db, v, st)
+        await _clear_seed_progress(db)
+
     return stats
 
 
