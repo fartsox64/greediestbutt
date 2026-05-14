@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from ..auth import get_current_user
 from ..database import get_db
 from ..models import DailyRun, Follow, GameVersion, LeaderboardEntry, PlayerOverallStats, SortType, SteamPlayerCache, User, VERSION_ORDER
 from .filters import visible_entries_filter
@@ -603,8 +604,17 @@ async def get_daily_counts(db: AsyncSession = Depends(get_db)):
 # Scrape operations
 # ---------------------------------------------------------------------------
 
+async def _require_admin(current_user=Depends(get_current_user)):
+    if current_user is None or current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return current_user
+
+
 @router.post("/scrape/today", response_model=ScrapeResult)
-async def scrape_today_endpoint(db: AsyncSession = Depends(get_db)):
+async def scrape_today_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
     """Fetch and store today's daily run leaderboards for all versions."""
     stats = await scrape_today(db)
     _cache_invalidate_prefix("dates:")
@@ -630,6 +640,7 @@ async def seed_endpoint(
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
 ):
     """Seed the database with all historical daily run data.
 
@@ -656,7 +667,10 @@ async def seed_endpoint(
 
 
 @router.post("/scrape/backfill-names")
-async def backfill_names_endpoint(db: AsyncSession = Depends(get_db)):
+async def backfill_names_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
     """Resolve player names for all leaderboard entries currently missing them.
 
     Useful after a seed run, or to recover names that were missed due to API
@@ -668,7 +682,10 @@ async def backfill_names_endpoint(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scrape/backfill-packed-nulls")
-async def backfill_packed_nulls_endpoint(db: AsyncSession = Depends(get_db)):
+async def backfill_packed_nulls_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
     """Null out opaque bonus/penalty fields stored in packed-format entries.
 
     Packed-format entries have garbage values for megasatan_bonus, rush_bonus,
@@ -680,7 +697,10 @@ async def backfill_packed_nulls_endpoint(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scrape/backfill-rp-time")
-async def backfill_rp_time_endpoint(db: AsyncSession = Depends(get_db)):
+async def backfill_rp_time_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
     """Populate time_taken for R+ time-sort packed-format entries that have NULL.
 
     Uses steam_value - 0x74000000 to recover in-game frame counts.
@@ -691,7 +711,10 @@ async def backfill_rp_time_endpoint(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scrape/refresh-stats")
-async def refresh_stats_endpoint(db: AsyncSession = Depends(get_db)):
+async def refresh_stats_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
     """Rebuild the overall leaderboard stats cache for all version/sort combinations.
 
     Runs automatically after each scrape. Call manually after bulk data changes
@@ -710,7 +733,10 @@ async def refresh_stats_endpoint(db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/admin/leaderboard-discovery")
-async def leaderboard_discovery(sample_size: int = Query(50, ge=1, le=500)):
+async def leaderboard_discovery(
+    sample_size: int = Query(50, ge=1, le=500),
+    _admin=Depends(_require_admin),
+):
     """
     Fetch a sample of daily-run leaderboards from Steam and show their
     detected date, version, and sort type.
