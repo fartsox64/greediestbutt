@@ -395,6 +395,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `DELETE` | `/api/mod/users/{steam_id}/moderator` | Revoke moderator role |
 | `GET` | `/api/admin/api-key` | Get current API key (auto-generates if expired) |
 | `POST` | `/api/admin/api-key/regenerate` | Issue a new API key, invalidating the current one |
+| `GET` | `/api/admin/scheduler` | Current status of all scheduled jobs (last run, next run, running flag) |
 
 ### Feedback endpoints (any logged-in user)
 

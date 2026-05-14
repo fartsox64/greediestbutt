@@ -10,14 +10,98 @@ import {
   fetchApiKey,
   fetchFeedbackThread,
   fetchModerators,
+  fetchSchedulerStatus,
   grantModerator,
   regenerateApiKey,
   reopenFeedback,
   revokeModerator,
 } from "../api/client";
-import type { AdminPlayerResult, FeedbackItem, FeedbackThread, ReportOut } from "../types";
+import type { AdminPlayerResult, FeedbackItem, FeedbackThread, ReportOut, SchedulerJob } from "../types";
 import { VERSION_LABELS } from "../types";
 import { Pagination } from "./Pagination";
+
+const JOB_LABELS: Record<string, string> = {
+  scrape_recent:     "Scrape Recent",
+  backfill_names:    "Name Backfill",
+  full_stats_refresh: "Stats Refresh",
+};
+
+function ScheduledJobsSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-scheduler"],
+    queryFn: fetchSchedulerStatus,
+    refetchInterval: 15_000,
+  });
+
+  const jobs: SchedulerJob[] = data?.jobs ?? [];
+
+  function fmtAgo(iso: string | null): string {
+    if (!iso) return "—";
+    const diff = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  }
+
+  function fmtIn(iso: string | null): string {
+    if (!iso) return "—";
+    const diff = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+    if (diff <= 0) return "now";
+    if (diff < 60) return `in ${diff}s`;
+    if (diff < 3600) return `in ${Math.floor(diff / 60)}m`;
+    return `in ${Math.floor(diff / 3600)}h`;
+  }
+
+  return (
+    <div className="space-y-3">
+      <h2 className="font-title text-isaac-accent text-sm tracking-wide uppercase">Scheduled Jobs</h2>
+      {isLoading ? (
+        <div className="text-isaac-muted text-sm animate-pulse">Loading…</div>
+      ) : (
+        <div className="border border-isaac-border divide-y divide-isaac-border">
+          {jobs.map((job) => {
+            const label = JOB_LABELS[job.id] ?? job.id;
+            const statusColor =
+              job.running          ? "text-blue-400 border-blue-400/50" :
+              job.last_status === "ok"    ? "text-green-400 border-green-400/50" :
+              job.last_status === "error" ? "text-red-400 border-red-400/50" :
+                                           "text-isaac-muted border-isaac-border";
+            const statusLabel =
+              job.running          ? "running" :
+              job.last_status ?? "never run";
+
+            return (
+              <div key={job.id} className="flex items-center justify-between px-4 py-3 gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  {job.running && (
+                    <span className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  )}
+                  <span className="text-isaac-text text-sm">{label}</span>
+                  <span className={`text-[10px] uppercase tracking-wider border px-1.5 py-0.5 flex-shrink-0 ${statusColor}`}>
+                    {statusLabel}
+                  </span>
+                  {job.last_duration_s != null && !job.running && (
+                    <span className="text-xs text-isaac-muted font-mono">{job.last_duration_s}s</span>
+                  )}
+                </div>
+                <div className="flex gap-6 flex-shrink-0 text-xs text-isaac-muted tabular-nums">
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider mb-0.5">Last run</div>
+                    <div>{fmtAgo(job.last_run_at)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider mb-0.5">Next run</div>
+                    <div>{fmtIn(job.next_run_at)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ApiKeySection() {
   const queryClient = useQueryClient();
@@ -112,6 +196,9 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-8">
+      {/* Scheduled jobs */}
+      <ScheduledJobsSection />
+
       {/* API key */}
       <ApiKeySection />
 

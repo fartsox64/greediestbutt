@@ -271,6 +271,19 @@ export interface AboutContent {
   content: string;
 }
 
+export interface SchedulerJob {
+  id: string;
+  next_run_at: string | null;
+  running: boolean;
+  last_run_at: string | null;
+  last_status: "ok" | "error" | null;
+  last_duration_s: number | null;
+}
+
+export interface SchedulerStatusResponse {
+  jobs: SchedulerJob[];
+}
+
 export const VERSION_ORDER: GameVersion[] = [
   "repentance_plus_solo",
   "repentance_plus_coop",

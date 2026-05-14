@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -746,6 +746,29 @@ async def refresh_stats_endpoint(
 # ---------------------------------------------------------------------------
 # Admin: leaderboard discovery
 # ---------------------------------------------------------------------------
+
+@router.get("/admin/scheduler")
+async def get_scheduler_status(
+    request: Request,
+    _admin=Depends(_require_admin),
+):
+    """Return the status of all scheduled jobs."""
+    scheduler = request.app.state.scheduler
+    job_state: dict = request.app.state.job_state
+
+    jobs = []
+    for job in scheduler.get_jobs():
+        state = job_state.get(job.id, {})
+        jobs.append({
+            "id": job.id,
+            "next_run_at": job.next_run_time.isoformat() if job.next_run_time else None,
+            "running": state.get("running", False),
+            "last_run_at": state.get("last_run_at"),
+            "last_status": state.get("last_status"),
+            "last_duration_s": state.get("last_duration_s"),
+        })
+    return {"jobs": jobs}
+
 
 @router.get("/admin/leaderboard-discovery")
 async def leaderboard_discovery(

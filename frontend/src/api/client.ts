@@ -18,6 +18,7 @@ import type {
   PlayerResponse,
   ProfileResponse,
   ReportsResponse,
+  SchedulerStatusResponse,
   SearchResponse,
   SortType,
   StatsResponse,
@@ -336,4 +337,12 @@ export function fetchApiKey(): Promise<ApiKeyResponse> {
 
 export function regenerateApiKey(): Promise<ApiKeyResponse> {
   return apiFetch<ApiKeyResponse>(`${BASE}/admin/api-key/regenerate`, undefined, { method: "POST" });
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler status
+// ---------------------------------------------------------------------------
+
+export function fetchSchedulerStatus(): Promise<SchedulerStatusResponse> {
+  return apiFetch<SchedulerStatusResponse>(`${BASE}/admin/scheduler`);
 }
