@@ -615,14 +615,21 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     if (cached := _cache_get(cache_key)) is not None:
         return cached
 
+    _score_only = (
+        LeaderboardEntry.hidden == False,  # noqa: E712
+        DailyRun.sort_type == SortType.SCORE,
+    )
     total_result = await db.execute(
         select(func.count())
         .select_from(LeaderboardEntry)
-        .where(LeaderboardEntry.hidden == False)  # noqa: E712
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+        .where(*_score_only)
     )
     players_result = await db.execute(
         select(func.count(func.distinct(LeaderboardEntry.steam_id)))
-        .where(LeaderboardEntry.hidden == False)  # noqa: E712
+        .select_from(LeaderboardEntry)
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+        .where(*_score_only)
     )
     last_scraped_result = await db.execute(
         select(func.max(DailyRun.scraped_at))
