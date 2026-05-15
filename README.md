@@ -261,7 +261,7 @@ Config is read from `backend/.env`. Copy `backend/.env.example` as a starting po
 The backend runs three scheduled jobs automatically:
 
 - **Every 10 minutes** — scrapes today's and yesterday's leaderboards for all versions and refreshes overall-leaderboard stats for any players whose scores changed.
-- **Every hour** — resolves up to 30,000 player names that are missing from the cache, prioritising players with the most recent runs.
+- **Every 15 minutes** — resolves up to 93,750 player names that are missing from the cache, prioritising players with the most recent runs (≤ 937 Steam API calls per run, ≤ 90,000/day).
 - **Daily at 02:00 UTC** — runs a full overall-leaderboard stats refresh across all versions and sort types, catching any drift that the incremental updates may have missed.
 
 No external cron job is required for normal operation. The scheduler starts with the server and logs each run.

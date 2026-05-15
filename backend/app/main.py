@@ -71,10 +71,10 @@ async def _scrape_job() -> None:
 
 async def _backfill_names_job() -> None:
     t0 = _job_start("backfill_names")
-    log.info("Scheduled name backfill: up to 30,000 players")
+    log.info("Scheduled name backfill: up to 93,750 players")
     try:
         async with AsyncSessionLocal() as db:
-            resolved = await backfill_player_names(db, limit=30_000)
+            resolved = await backfill_player_names(db, limit=93_750)
         log.info("Scheduled name backfill complete — %d players resolved", resolved)
         _job_end("backfill_names", t0, ok=True)
     except Exception:
@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         _backfill_names_job,
         trigger="interval",
-        hours=1,
+        minutes=15,
         id="backfill_names",
         max_instances=1,
         coalesce=True,
@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     app.state.scheduler = scheduler
     app.state.job_state = _job_state
-    log.info("Scheduler started — scraping every 10 minutes, name backfill every hour, full stats refresh daily at 02:00")
+    log.info("Scheduler started — scraping every 10 minutes, name backfill every 15 minutes, full stats refresh daily at 02:00")
     yield
     scheduler.shutdown(wait=False)
     log.info("Scheduler stopped")
