@@ -824,7 +824,7 @@ async def backfill_player_names(db: AsyncSession, limit: int | None = None) -> i
                             _RETRIES + 1, exc,
                         )
                         break
-                    wait = 2 ** attempt
+                    wait = 2 ** (attempt + 1)
                     log.warning(
                         "backfill_player_names: API error (attempt %d/%d), flushing and retrying in %ss",
                         attempt + 1, _RETRIES + 1, wait,

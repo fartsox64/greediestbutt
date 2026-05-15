@@ -71,10 +71,10 @@ async def _scrape_job() -> None:
 
 async def _backfill_names_job() -> None:
     t0 = _job_start("backfill_names")
-    log.info("Scheduled name backfill: up to 93,750 players")
+    log.info("Scheduled name backfill: up to 70,312 players")
     try:
         async with AsyncSessionLocal() as db:
-            resolved = await backfill_player_names(db, limit=93_750)
+            resolved = await backfill_player_names(db, limit=70_312)
         log.info("Scheduled name backfill complete — %d players resolved", resolved)
         _job_end("backfill_names", t0, ok=True)
     except Exception:
