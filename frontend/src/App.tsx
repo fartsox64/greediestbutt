@@ -541,9 +541,13 @@ export default function App() {
         ) : view === "about" ? (
           <AboutPage currentUser={user} />
         ) : view === "admin" ? (
-          <AdminPanel />
+          user?.role === "admin"
+            ? <AdminPanel />
+            : <InsufficientPermissions />
         ) : view === "mod" ? (
-          <ModPanel />
+          (user?.role === "admin" || user?.role === "moderator")
+            ? <ModPanel />
+            : <InsufficientPermissions />
         ) : view === "profile" ? (
           profileQuery.isLoading ? (
             <Loading />
@@ -681,6 +685,14 @@ function ErrorMessage({ error }: { error: Error }) {
   return (
     <div className="border border-isaac-accent bg-red-950/30 text-isaac-accent px-4 py-3 text-sm">
       {error.message}
+    </div>
+  );
+}
+
+function InsufficientPermissions() {
+  return (
+    <div className="text-center py-16 text-isaac-muted text-sm">
+      You don't have permission to view this page.
     </div>
   );
 }
