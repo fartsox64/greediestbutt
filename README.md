@@ -64,76 +64,109 @@ Migrations are applied automatically on restart. Postgres data persists in the `
 
 ### Firewall
 
-Docker modifies `iptables` directly and bypasses UFW, so `ufw allow`/`deny` rules have no effect on Docker-exposed ports. A working alternative is to use the **`DOCKER-USER` chain**, which Docker provides for this purpose. Rules added there are evaluated before Docker's own forwarding rules.
+Docker modifies `iptables` directly and bypasses UFW by default. The solution has two parts: hook into Docker's `DOCKER-USER` chain via `after.rules`, and keep UFW's allow-list restricted to Cloudflare IP ranges.
 
-The rules are written into `/etc/ufw/after.rules` and `/etc/ufw/after6.rules` so UFW manages their lifetime — no `iptables-persistent` needed.
-
-#### Setup
-
-Allow SSH and enable UFW:
+#### 1. Allow SSH and enable UFW
 
 ```bash
 ufw allow 22
 ufw enable
 ```
 
-Save the following as a script (e.g. `/usr/local/sbin/update-cloudflare-rules`) and run it whenever Cloudflare's IP ranges change. It strips any previously written block before appending the fresh one, so it is safe to re-run.
+#### 2. Configure the DOCKER-USER chain
+
+Append the following block to `/etc/ufw/after.rules`. It installs the `DOCKER-USER` chain, uses connection tracking to permit related/established traffic and accept inter-container traffic, and returns early for RFC-1918 source addresses while logging and dropping everything else.
+
+```
+# BEGIN UFW AND DOCKER
+*filter
+:ufw-user-forward - [0:0]
+:ufw-docker-logging-deny - [0:0]
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -j ufw-user-forward
+
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+-A DOCKER-USER -j RETURN -s 10.0.0.0/8
+-A DOCKER-USER -j RETURN -s 172.16.0.0/12
+-A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
+
+-A DOCKER-USER -j RETURN
+
+-A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+-A ufw-docker-logging-deny -j DROP
+
+COMMIT
+# END UFW AND DOCKER
+```
+
+#### 3. Restrict inbound traffic to Cloudflare IPs
+
+Save the following script to `/usr/local/sbin/cf-ufw.sh` and make it executable. It fetches Cloudflare's current IP ranges and issues `ufw allow` and `ufw route allow` rules for ports 80 and 443. UFW skips any rule that already exists, so the script is safe to re-run.
 
 ```bash
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+#
+#  UFW rule updater to only allow HTTP and HTTPS traffic from Cloudflare IP addresses.
+#  Readme: https://github.com/jakejarvis/cloudflare-ufw-updater/blob/master/README.md
+#
+#  Inspired by https://github.com/Paul-Reed/cloudflare-ufw/blob/master/cloudflare-ufw.sh
+#
+#  To run as a daily cron job:
+#    1. sudo crontab -e
+#    2. Add this line to the end:
+#        @daily /this/file/location/cf-ufw.sh &> /dev/null
+#
 
-# Strip the existing Cloudflare block (if any) from a UFW rules file,
-# then append a fresh one built from the given IPs.
-update_rules_file() {
-  local file="$1"
-  local url="$2"
+# Fetch latest IP range lists (both v4 and v6) from Cloudflare
+curl -s https://www.cloudflare.com/ips-v4 -o /tmp/cf_ips
+echo "" >> /tmp/cf_ips
+curl -s https://www.cloudflare.com/ips-v6 >> /tmp/cf_ips
 
-  # Remove previous block using Python (handles multiline cleanly without sed)
-  sudo python3 - "$file" << 'PYEOF'
-import sys, pathlib
-p = pathlib.Path(sys.argv[1])
-lines = p.read_text().splitlines(keepends=True)
-out, skip = [], False
-for line in lines:
-    if line.rstrip() == '# Cloudflare IP restriction for Docker':
-        skip = True
-    if not skip:
-        out.append(line)
-    if skip and line.rstrip() == 'COMMIT':
-        skip = False
-p.write_text(''.join(out))
-PYEOF
+# Restrict traffic to ports 80 (TCP) & 443 (TCP)
+# UFW will skip a subnet if a rule already exists (which it probably does)
+for ip in $(cat /tmp/cf_ips)
+do
+    ufw allow from "$ip" to any port 80,443 proto tcp comment 'Cloudflare'
+    ufw route allow proto tcp from "$ip" to any port 443 comment 'Cloudflare'
+done
 
-  # Append fresh block
-  {
-    printf '\n# Cloudflare IP restriction for Docker\n'
-    echo "*filter"
-    echo ":DOCKER-USER - [0:0]"
-    for ip in $(curl -s "$url"); do
-      echo "-A DOCKER-USER -s $ip ! -i docker0 -p tcp --dport 80  -j ACCEPT"
-      echo "-A DOCKER-USER -s $ip ! -i docker0 -p tcp --dport 443 -j ACCEPT"
-    done
-    echo "-A DOCKER-USER ! -i docker0 -p tcp --dport 80  -j DROP"
-    echo "-A DOCKER-USER ! -i docker0 -p tcp --dport 443 -j DROP"
-    echo "COMMIT"
-  } | sudo tee -a "$file" > /dev/null
-}
+# Delete downloaded lists from above
+rm /tmp/cf_ips
 
-update_rules_file /etc/ufw/after.rules  https://www.cloudflare.com/ips-v4
-update_rules_file /etc/ufw/after6.rules https://www.cloudflare.com/ips-v6
-
-sudo ufw reload
+# Need to reload UFW before new rules take effect
+ufw reload
 ```
 
 ```bash
-sudo chmod +x /usr/local/sbin/update-cloudflare-rules
-sudo update-cloudflare-rules
+sudo chmod +x /usr/local/sbin/cf-ufw.sh
+sudo /usr/local/sbin/cf-ufw.sh
 ```
 
-The `:DOCKER-USER - [0:0]` line creates the chain if UFW runs before Docker at boot. When Docker starts, it adds its own jump from `FORWARD` into `DOCKER-USER` and will find the chain — and your allow/drop rules — already in place.
+#### 4. Schedule daily IP range updates
 
-The `! -i docker0` guard limits the DROP rules to traffic arriving from outside the Docker bridge, so container-to-container traffic is unaffected.
+Cloudflare's IP ranges change occasionally. Run the script on a daily cron to keep rules current:
+
+```bash
+sudo crontab -e
+```
+
+Add:
+
+```
+@daily /usr/local/sbin/cf-ufw.sh &> /dev/null
+```
+
+#### Attribution
+
+- DOCKER-USER chain approach: [chaifeng/ufw-docker](https://github.com/chaifeng/ufw-docker)
+- Cloudflare IP updater script: [jakejarvis/cloudflare-ufw-updater](https://github.com/jakejarvis/cloudflare-ufw-updater/blob/master/README.md)
 
 ---
 
