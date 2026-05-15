@@ -64,11 +64,9 @@ Migrations are applied automatically on restart. Postgres data persists in the `
 
 ### Firewall
 
-Docker writes `iptables` rules directly, bypassing UFW entirely — `ufw allow`/`deny` rules have no effect on Docker-exposed ports. The approach used here avoids that problem:
+Docker modifies `iptables` directly and bypasses UFW, so `ufw allow`/`deny` rules have no effect on Docker-exposed ports. A working alternative is to use the **`DOCKER-USER` chain**, which Docker provides for this purpose. Rules added there are evaluated before Docker's own forwarding rules.
 
-1. **`docker-compose.yml` binds Caddy only to `127.0.0.1`** (`127.0.0.1:80:80`). Docker's userspace proxy (`docker-proxy`) then listens on `127.0.0.1:80/443` and forwards to the Caddy container. Nothing is open on the public interface, so non-Cloudflare traffic finds no socket and is refused automatically.
-
-2. **UFW's `before.rules` adds `PREROUTING REDIRECT` rules** that steer inbound traffic from Cloudflare's IP ranges to `127.0.0.1`, where `docker-proxy` is listening. `REDIRECT` without `--to-port` keeps the same port; conntrack restores the source address on return packets automatically.
+The rules are written into `/etc/ufw/after.rules` and `/etc/ufw/after6.rules` so UFW manages their lifetime — no `iptables-persistent` needed.
 
 #### Setup
 
@@ -79,43 +77,63 @@ ufw allow 22
 ufw enable
 ```
 
-Generate and insert the Cloudflare redirect rules into UFW's nat config, then reload:
-
-> **Warning:** The script below writes a new `before.rules` / `before6.rules` from scratch. If you have existing custom rules in those files, merge them manually instead of running the script as-is.
+Save the following as a script (e.g. `/usr/local/sbin/update-cloudflare-rules`) and run it whenever Cloudflare's IP ranges change. It strips any previously written block before appending the fresh one, so it is safe to re-run.
 
 ```bash
-# Write /etc/ufw/before.rules — *nat block (IPv4) followed by the standard *filter content
-{
-  echo "*nat"
-  echo ":PREROUTING ACCEPT [0:0]"
-  for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
-    echo "-A PREROUTING -s $ip -p tcp --dport 80  -j REDIRECT"
-    echo "-A PREROUTING -s $ip -p tcp --dport 443 -j REDIRECT"
-  done
-  echo "COMMIT"
-  echo ""
-  cat /etc/ufw/before.rules
-} > /tmp/ufw-before.rules && sudo mv /tmp/ufw-before.rules /etc/ufw/before.rules
+#!/bin/bash
+set -euo pipefail
 
-# Write /etc/ufw/before6.rules — same for IPv6
-{
-  echo "*nat"
-  echo ":PREROUTING ACCEPT [0:0]"
-  for ip in $(curl -s https://www.cloudflare.com/ips-v6); do
-    echo "-A PREROUTING -s $ip -p tcp --dport 80  -j REDIRECT"
-    echo "-A PREROUTING -s $ip -p tcp --dport 443 -j REDIRECT"
-  done
-  echo "COMMIT"
-  echo ""
-  cat /etc/ufw/before6.rules
-} > /tmp/ufw-before6.rules && sudo mv /tmp/ufw-before6.rules /etc/ufw/before6.rules
+# Strip the existing Cloudflare block (if any) from a UFW rules file,
+# then append a fresh one built from the given IPs.
+update_rules_file() {
+  local file="$1"
+  local url="$2"
+
+  # Remove previous block using Python (handles multiline cleanly without sed)
+  sudo python3 - "$file" << 'PYEOF'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+lines = p.read_text().splitlines(keepends=True)
+out, skip = [], False
+for line in lines:
+    if line.rstrip() == '# Cloudflare IP restriction for Docker':
+        skip = True
+    if not skip:
+        out.append(line)
+    if skip and line.rstrip() == 'COMMIT':
+        skip = False
+p.write_text(''.join(out))
+PYEOF
+
+  # Append fresh block
+  {
+    printf '\n# Cloudflare IP restriction for Docker\n'
+    echo "*filter"
+    echo ":DOCKER-USER - [0:0]"
+    for ip in $(curl -s "$url"); do
+      echo "-A DOCKER-USER -s $ip ! -i docker0 -p tcp --dport 80  -j ACCEPT"
+      echo "-A DOCKER-USER -s $ip ! -i docker0 -p tcp --dport 443 -j ACCEPT"
+    done
+    echo "-A DOCKER-USER ! -i docker0 -p tcp --dport 80  -j DROP"
+    echo "-A DOCKER-USER ! -i docker0 -p tcp --dport 443 -j DROP"
+    echo "COMMIT"
+  } | sudo tee -a "$file" > /dev/null
+}
+
+update_rules_file /etc/ufw/after.rules  https://www.cloudflare.com/ips-v4
+update_rules_file /etc/ufw/after6.rules https://www.cloudflare.com/ips-v6
 
 sudo ufw reload
 ```
 
-UFW reloads these files on every `ufw reload` or system boot, so the rules are persistent without needing `iptables-persistent`.
+```bash
+sudo chmod +x /usr/local/sbin/update-cloudflare-rules
+sudo update-cloudflare-rules
+```
 
-> **Note:** Cloudflare's IP ranges change occasionally. Re-run the script and `ufw reload` after fetching updated ranges.
+The `:DOCKER-USER - [0:0]` line creates the chain if UFW runs before Docker at boot. When Docker starts, it adds its own jump from `FORWARD` into `DOCKER-USER` and will find the chain — and your allow/drop rules — already in place.
+
+The `! -i docker0` guard limits the DROP rules to traffic arriving from outside the Docker bridge, so container-to-container traffic is unaffected.
 
 ---
 
