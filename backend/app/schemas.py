@@ -62,6 +62,13 @@ class RawLeaderboard(BaseModel):
     detected_sort_type: SortType | None
 
 
+class EntryDetailOut(LeaderboardEntryOut):
+    date: date
+    version: GameVersion
+    sort_type: SortType
+    total_entries: int | None = None
+
+
 class PlayerRunEntry(LeaderboardEntryOut):
     date: date
 

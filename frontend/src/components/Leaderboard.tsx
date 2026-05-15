@@ -17,6 +17,7 @@ interface Props {
   onUnfollow: (steamId: string) => void;
   onHide: (entryId: number) => void;
   onReport: (entryId: number, playerName: string | null) => void;
+  onScoreClick: (entryId: number) => void;
 }
 
 export function Leaderboard({
@@ -32,6 +33,7 @@ export function Leaderboard({
   onUnfollow,
   onHide,
   onReport,
+  onScoreClick,
 }: Props) {
   if (entries.length === 0) {
     return (
@@ -69,6 +71,7 @@ export function Leaderboard({
                   onUnfollow={onUnfollow}
                   onHide={onHide}
                   onReport={onReport}
+                  onScoreClick={onScoreClick}
                 />
               ))}
             </tbody>
@@ -102,6 +105,7 @@ export function Leaderboard({
                 onUnfollow={onUnfollow}
                 onHide={onHide}
                 onReport={onReport}
+                onScoreClick={onScoreClick}
               />
             ))}
           </tbody>
@@ -122,9 +126,10 @@ interface RowProps {
   onUnfollow: (steamId: string) => void;
   onHide: (entryId: number) => void;
   onReport: (entryId: number, playerName: string | null) => void;
+  onScoreClick: (entryId: number) => void;
 }
 
-function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlayerClick, onFollow, onUnfollow, onHide, onReport }: RowProps) {
+function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlayerClick, onFollow, onUnfollow, onHide, onReport, onScoreClick }: RowProps) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -202,8 +207,13 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
             )}
           </div>
         </td>
-        <td className="text-right pr-6 py-2.5 tabular-nums text-isaac-text font-mono">
-          {valueLabel}
+        <td className="text-right pr-6 py-2.5 tabular-nums font-mono">
+          <button
+            onClick={(e) => { e.stopPropagation(); onScoreClick(entry.id); }}
+            className="text-isaac-text hover:text-isaac-accent transition-colors"
+          >
+            {valueLabel}
+          </button>
         </td>
         {currentUser && (
           <td className="py-2.5 pr-2 w-16">

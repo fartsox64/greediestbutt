@@ -33,6 +33,13 @@ export interface PlayerRun extends LeaderboardEntry {
   date: string;
 }
 
+export interface EntryDetail extends LeaderboardEntry {
+  date: string;
+  version: GameVersion;
+  sort_type: SortType;
+  total_entries: number | null;
+}
+
 export interface PlayerResponse {
   steam_id: string;
   player_name: string | null;

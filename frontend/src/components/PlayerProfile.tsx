@@ -16,6 +16,7 @@ interface Props {
   onFollow: (steamId: string) => void;
   onUnfollow: (steamId: string) => void;
   onHide: (entryId: number) => void;
+  onScoreClick: (entryId: number) => void;
 }
 
 export function PlayerProfile({
@@ -30,6 +31,7 @@ export function PlayerProfile({
   onFollow,
   onUnfollow,
   onHide,
+  onScoreClick,
 }: Props) {
   const playerLabel = playerName ?? `[${steamId}]`;
   const mediumAvatarUrl = avatarUrl ? avatarUrl.replace(".jpg", "_medium.jpg") : undefined;
@@ -165,7 +167,7 @@ export function PlayerProfile({
           </thead>
           <tbody>
             {entries.map((entry, idx) => (
-              <RunRow key={entry.date} entry={entry} idx={idx} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} />
+              <RunRow key={entry.date} entry={entry} idx={idx} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} />
             ))}
           </tbody>
         </table>
@@ -174,7 +176,7 @@ export function PlayerProfile({
   );
 }
 
-function RunRow({ entry, idx, sortType, canHide, onHide }: { entry: PlayerRun; idx: number; sortType: SortType; canHide: boolean; onHide: (id: number) => void }) {
+function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick }: { entry: PlayerRun; idx: number; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -226,8 +228,13 @@ function RunRow({ entry, idx, sortType, canHide, onHide }: { entry: PlayerRun; i
         <td className={`text-right pr-4 py-2.5 tabular-nums ${rankClass}`}>
           {entry.rank}
         </td>
-        <td className="text-right pr-6 py-2.5 tabular-nums text-isaac-text font-mono">
-          {valueLabel}
+        <td className="text-right pr-6 py-2.5 tabular-nums font-mono">
+          <button
+            onClick={(e) => { e.stopPropagation(); onScoreClick(entry.id); }}
+            className="text-isaac-text hover:text-isaac-accent transition-colors"
+          >
+            {valueLabel}
+          </button>
         </td>
         {canHide && (
           <td className="py-2.5 pl-1 w-8">

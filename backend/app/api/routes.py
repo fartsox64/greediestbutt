@@ -18,6 +18,7 @@ from .filters import visible_entries_filter
 from ..schemas import (
     AvailableDatesResponse,
     AvatarsResponse,
+    EntryDetailOut,
     LeaderboardEntryOut,
     LeaderboardResponse,
     OverallEntry,
@@ -158,6 +159,57 @@ async def get_leaderboard(
     )
     _cache_set(cache_key, result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Entry detail
+# ---------------------------------------------------------------------------
+
+@router.get("/entry/{entry_id}", response_model=EntryDetailOut)
+async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(
+            LeaderboardEntry,
+            DailyRun.date,
+            DailyRun.version,
+            DailyRun.sort_type,
+            DailyRun.total_entries,
+            SteamPlayerCache.player_name,
+        )
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+        .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
+        .where(LeaderboardEntry.id == entry_id)
+        .where(LeaderboardEntry.hidden.is_(False))
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    entry, run_date, version, sort_type, total_entries, player_name = row
+    return EntryDetailOut(
+        id=entry.id,
+        rank=entry.rank,
+        steam_id=entry.steam_id,
+        player_name=player_name,
+        value=entry.value,
+        hidden=entry.hidden,
+        stage_bonus=entry.stage_bonus,
+        schwag_bonus=entry.schwag_bonus,
+        bluebaby_bonus=entry.bluebaby_bonus,
+        lamb_bonus=entry.lamb_bonus,
+        megasatan_bonus=entry.megasatan_bonus,
+        rush_bonus=entry.rush_bonus,
+        exploration_bonus=entry.exploration_bonus,
+        damage_penalty=entry.damage_penalty,
+        time_penalty=entry.time_penalty,
+        item_penalty=entry.item_penalty,
+        level=entry.level,
+        time_taken=entry.time_taken,
+        goal=entry.goal,
+        date=run_date,
+        version=version,
+        sort_type=sort_type,
+        total_entries=total_entries,
+    )
 
 
 # ---------------------------------------------------------------------------

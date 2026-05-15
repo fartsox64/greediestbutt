@@ -439,6 +439,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/api/entry/{id}` | Full detail for a single leaderboard entry (rank, score/time, bonuses, penalties, date, version) |
 | `GET` | `/api/leaderboard` | Paginated daily leaderboard |
 | `GET` | `/api/overall-leaderboard` | All-time aggregate rankings |
 | `GET` | `/api/player/{steam_id}` | All runs for a specific player |

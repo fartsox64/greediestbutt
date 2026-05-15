@@ -5,6 +5,7 @@ import {
   clearToken,
   fetchAvatars,
   fetchAvailableDates,
+  fetchEntry,
   fetchFollows,
   fetchFriendsLeaderboard,
   fetchLeaderboard,
@@ -40,10 +41,11 @@ import { Footer } from "./components/Footer";
 import { FeedbackModal } from "./components/FeedbackModal";
 import { AboutPage } from "./components/AboutPage";
 import { DailyCountsPage } from "./components/DailyCountsPage";
+import { ScoreDetail } from "./components/ScoreDetail";
 import type { GameVersion, SortType } from "./types";
 import { safeHttpsUrl } from "./utils";
 
-type View = "daily" | "overall" | "profile" | "mod" | "admin" | "about" | "stats";
+type View = "daily" | "overall" | "profile" | "mod" | "admin" | "about" | "stats" | "entry";
 
 interface SelectedPlayer {
   steamId: string;
@@ -57,6 +59,7 @@ interface UrlState {
   selectedDate: string | null;
   selectedPlayer: SelectedPlayer | null;
   profileSteamId: string | null;
+  entryId: number | null;
 }
 
 function readUrl(): UrlState {
@@ -66,16 +69,18 @@ function readUrl(): UrlState {
   const isAdmin = segs[0] === "admin";
   const isAbout = segs[0] === "about";
   const isStats = segs[0] === "stats";
-  const view: View = isAdmin ? "admin" : isMod ? "mod" : isAbout ? "about" : isStats ? "stats" : isProfile ? "profile" : segs[0] === "overall" ? "overall" : "daily";
-  const version = (!isProfile ? segs[1] as GameVersion : null) ?? "repentance_plus_solo";
-  const sortType = (!isProfile ? segs[2] as SortType : null) ?? "score";
+  const isEntry = segs[0] === "entry";
+  const view: View = isAdmin ? "admin" : isMod ? "mod" : isAbout ? "about" : isStats ? "stats" : isProfile ? "profile" : isEntry ? "entry" : segs[0] === "overall" ? "overall" : "daily";
+  const version = (!isProfile && !isEntry ? segs[1] as GameVersion : null) ?? "repentance_plus_solo";
+  const sortType = (!isProfile && !isEntry ? segs[2] as SortType : null) ?? "score";
   const selectedDate = view === "daily" ? (segs[3] ?? null) : null;
   const selectedPlayer =
     view === "overall" && segs[3] === "player" && segs[4]
       ? { steamId: segs[4], playerName: null }
       : null;
   const profileSteamId = isProfile && segs[1] ? segs[1] : null;
-  return { view, version, sortType, selectedDate, selectedPlayer, profileSteamId };
+  const entryId = isEntry && segs[1] ? parseInt(segs[1], 10) : null;
+  return { view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId };
 }
 
 function writeUrl(s: UrlState, replace: boolean): void {
@@ -88,10 +93,12 @@ function writeUrl(s: UrlState, replace: boolean): void {
     url = "/about";
   } else if (s.view === "stats") {
     url = "/stats";
+  } else if (s.view === "entry" && s.entryId != null) {
+    url = `/entry/${s.entryId}`;
   } else if (s.view === "profile" && s.profileSteamId) {
     url = `/profile/${s.profileSteamId}`;
   } else {
-    const parts: string[] = [s.view, s.version, s.sortType];
+    const parts: string[] = [s.view === "entry" ? "daily" : s.view, s.version, s.sortType];
     if (s.view === "daily" && s.selectedDate) parts.push(s.selectedDate);
     else if (s.view === "overall" && s.selectedPlayer) parts.push("player", s.selectedPlayer.steamId);
     url = `/${parts.join("/")}`;
@@ -112,6 +119,7 @@ export default function App() {
   const [pageSize, setPageSize] = useState(20);
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayer | null>(() => readUrl().selectedPlayer);
   const [profileSteamId, setProfileSteamId] = useState<string | null>(() => readUrl().profileSteamId);
+  const [entryId, setEntryId] = useState<number | null>(() => readUrl().entryId);
 
   // Track whether a token is stored (drives auth queries without re-reading localStorage every render)
   const [hasToken, setHasToken] = useState(() => !!getToken());
@@ -140,13 +148,14 @@ export default function App() {
       setSelectedDate(s.selectedDate);
       setSelectedPlayer(s.selectedPlayer);
       setProfileSteamId(s.profileSteamId);
+      setEntryId(s.entryId);
       setPage(1);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
-  const snap = (): UrlState => ({ view, version, sortType, selectedDate, selectedPlayer, profileSteamId });
+  const snap = (): UrlState => ({ view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId });
 
   const handleVersionChange = (v: GameVersion) => {
     writeUrl({ ...snap(), version: v, selectedDate: null, selectedPlayer: null }, false);
@@ -170,6 +179,10 @@ export default function App() {
   const handleProfileClick = (steamId: string) => {
     writeUrl({ ...snap(), view: "profile", profileSteamId: steamId, selectedPlayer: null }, false);
     setView("profile"); setProfileSteamId(steamId); setSelectedPlayer(null);
+  };
+  const handleScoreClick = (id: number) => {
+    writeUrl({ ...snap(), view: "entry", entryId: id }, false);
+    setView("entry"); setEntryId(id);
   };
   const handleViewRunHistory = (steamId: string, version: GameVersion, sortType: SortType, playerName: string | null) => {
     const player = { steamId, playerName };
@@ -343,6 +356,13 @@ export default function App() {
     staleTime: 5 * 60_000,
   });
 
+  const entryDetailQuery = useQuery({
+    queryKey: ["entry", entryId],
+    queryFn: () => fetchEntry(entryId!),
+    enabled: view === "entry" && entryId !== null,
+    staleTime: 5 * 60_000,
+  });
+
   const friendsQuery = useQuery({
     queryKey: ["friends-leaderboard", version, sortType, activeDate],
     queryFn: () =>
@@ -368,8 +388,9 @@ export default function App() {
     if (view === "daily" && lb) return lb.entries.map((e) => e.steam_id);
     if (view === "overall" && selectedPlayer !== null && player) return [player.steam_id];
     if (view === "overall" && overall) return overall.entries.map((e) => e.steam_id);
+    if (view === "entry" && entryDetailQuery.data) return [entryDetailQuery.data.steam_id];
     return [];
-  }, [view, lb, overall, player, selectedPlayer]);
+  }, [view, lb, overall, player, selectedPlayer, entryDetailQuery.data]);
 
   const avatarQuery = useQuery({
     queryKey: ["avatars", avatarSteamIds],
@@ -519,9 +540,9 @@ export default function App() {
       )}
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {view !== "profile" && view !== "mod" && view !== "admin" && view !== "about" && view !== "stats" && selectedPlayer === null && <VersionTabs value={version} onChange={handleVersionChange} />}
+        {view !== "profile" && view !== "mod" && view !== "admin" && view !== "about" && view !== "stats" && view !== "entry" && selectedPlayer === null && <VersionTabs value={version} onChange={handleVersionChange} />}
 
-        {view !== "profile" && view !== "mod" && view !== "admin" && view !== "about" && view !== "stats" && selectedPlayer === null && (
+        {view !== "profile" && view !== "mod" && view !== "admin" && view !== "about" && view !== "stats" && view !== "entry" && selectedPlayer === null && (
           <div className="flex flex-wrap gap-4 items-center justify-between border border-isaac-border bg-isaac-surface px-4 py-3">
             <div className="flex flex-wrap gap-4 items-center">
               <SortToggle value={sortType} onChange={handleSortTypeChange} />
@@ -536,7 +557,20 @@ export default function App() {
           </div>
         )}
 
-        {view === "stats" ? (
+        {view === "entry" ? (
+          entryDetailQuery.isLoading ? (
+            <Loading />
+          ) : entryDetailQuery.isError ? (
+            <ErrorMessage error={entryDetailQuery.error} />
+          ) : entryDetailQuery.data ? (
+            <ScoreDetail
+              entry={entryDetailQuery.data}
+              avatarUrl={avatars[entryDetailQuery.data.steam_id]}
+              onPlayerClick={handleProfileClick}
+              onBack={() => window.history.back()}
+            />
+          ) : null
+        ) : view === "stats" ? (
           <DailyCountsPage />
         ) : view === "about" ? (
           <AboutPage currentUser={user} />
@@ -598,6 +632,7 @@ export default function App() {
                   onUnfollow={handleUnfollow}
                   onHide={handleHide}
                   onReport={handleReport}
+                  onScoreClick={handleScoreClick}
                 />
                 <Pagination page={lb.page} totalPages={lb.total_pages} onPageChange={handlePageChange} />
               </>
@@ -622,6 +657,7 @@ export default function App() {
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onHide={handleHide}
+                onScoreClick={handleScoreClick}
               />
             ) : null}
           </>

@@ -4,6 +4,7 @@ import type {
   AvatarsResponse,
   AvailableDatesResponse,
   DailyCountsResponse,
+  EntryDetail,
   FeedbackItem,
   FeedbackListResponse,
   FeedbackMessage,
@@ -75,6 +76,14 @@ async function apiFetch<T>(
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+// ---------------------------------------------------------------------------
+// Entry detail
+// ---------------------------------------------------------------------------
+
+export function fetchEntry(id: number): Promise<EntryDetail> {
+  return apiFetch<EntryDetail>(`${BASE}/entry/${id}`);
 }
 
 // ---------------------------------------------------------------------------
