@@ -673,21 +673,22 @@ async def seed_endpoint(
 
 @router.post("/scrape/backfill-names", status_code=202)
 async def backfill_names_endpoint(
+    limit: int | None = None,
     _admin=Depends(_require_admin),
 ):
     """Start a background pass to resolve player names for all entries missing them.
 
     Returns immediately with a run_id. Track progress in server logs by
-    filtering for that ID.
+    filtering for that ID. Pass ?limit=N to cap the number of names resolved.
     """
     run_id = str(uuid.uuid4())
 
     async def _run() -> None:
         run_id_var.set(run_id)
-        log.info("Backfill-names started (run_id=%s)", run_id)
+        log.info("Backfill-names started (run_id=%s, limit=%s)", run_id, limit)
         try:
             async with AsyncSessionLocal() as db:
-                await backfill_player_names(db)
+                await backfill_player_names(db, limit=limit)
             log.info("Backfill-names complete (run_id=%s)", run_id)
         except Exception:
             log.exception("Backfill-names failed (run_id=%s)", run_id)

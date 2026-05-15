@@ -522,7 +522,7 @@ All scrape endpoints require admin authentication — pass `Authorization: Beare
 |--------|------|-------------|
 | `POST` | `/api/scrape/today` | Scrape today's runs for all versions |
 | `POST` | `/api/scrape/seed` | Start background seed of all historical data — returns 202 with `run_id` (resumable) |
-| `POST` | `/api/scrape/backfill-names` | Start background player name resolution (all unresolved players, no limit) — returns 202 with `run_id` |
+| `POST` | `/api/scrape/backfill-names` | Start background player name resolution — returns 202 with `run_id`. Optional `?limit=N` caps the number resolved. |
 | `POST` | `/api/scrape/backfill-rp-time` | Populate `time_taken` for Repentance+ time-sort entries that have NULL (safe to re-run) |
 | `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types |
 | `GET` | `/api/admin/leaderboard-discovery` | Inspect raw Steam leaderboard names |
