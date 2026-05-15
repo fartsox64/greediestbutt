@@ -13,7 +13,7 @@ from .api.auth_routes import router as auth_router
 from .api.feedback_routes import router as feedback_router
 from .api.mod_routes import router as mod_router
 from .api.report_routes import router as report_router
-from .api.routes import router
+from .api.routes import router, refresh_stats_summary_cache
 from .config import settings
 from .database import AsyncSessionLocal
 from .scraper.steam import backfill_player_names, refresh_overall_stats, scrape_recent
@@ -57,6 +57,7 @@ async def _scrape_job() -> None:
     try:
         async with AsyncSessionLocal() as db:
             stats = await scrape_recent(db)
+            await refresh_stats_summary_cache(db)
         log.info(
             "Scheduled scrape complete — created=%d updated=%d entries=%d",
             stats["runs_created"],

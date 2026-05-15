@@ -79,6 +79,41 @@ def _cache_invalidate_prefix(prefix: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Stats summary cache — populated after each scrape, no TTL expiry
+# ---------------------------------------------------------------------------
+
+_stats_summary: "StatsResponse | None" = None
+
+
+async def refresh_stats_summary_cache(db: AsyncSession) -> None:
+    global _stats_summary
+    _score_only = (
+        LeaderboardEntry.hidden == False,  # noqa: E712
+        DailyRun.sort_type == SortType.SCORE,
+    )
+    total_result = await db.execute(
+        select(func.count())
+        .select_from(LeaderboardEntry)
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+        .where(*_score_only)
+    )
+    players_result = await db.execute(
+        select(func.count(func.distinct(LeaderboardEntry.steam_id)))
+        .select_from(LeaderboardEntry)
+        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+        .where(*_score_only)
+    )
+    last_scraped_result = await db.execute(
+        select(func.max(DailyRun.scraped_at))
+    )
+    _stats_summary = StatsResponse(
+        total_entries=total_result.scalar_one(),
+        total_players=players_result.scalar_one(),
+        last_scraped_at=last_scraped_result.scalar_one_or_none(),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Leaderboard query
 # ---------------------------------------------------------------------------
 
@@ -611,36 +646,10 @@ async def get_available_dates(
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(db: AsyncSession = Depends(get_db)):
-    cache_key = "stats:summary"
-    if (cached := _cache_get(cache_key)) is not None:
-        return cached
-
-    _score_only = (
-        LeaderboardEntry.hidden == False,  # noqa: E712
-        DailyRun.sort_type == SortType.SCORE,
-    )
-    total_result = await db.execute(
-        select(func.count())
-        .select_from(LeaderboardEntry)
-        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
-        .where(*_score_only)
-    )
-    players_result = await db.execute(
-        select(func.count(func.distinct(LeaderboardEntry.steam_id)))
-        .select_from(LeaderboardEntry)
-        .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
-        .where(*_score_only)
-    )
-    last_scraped_result = await db.execute(
-        select(func.max(DailyRun.scraped_at))
-    )
-    response = StatsResponse(
-        total_entries=total_result.scalar_one(),
-        total_players=players_result.scalar_one(),
-        last_scraped_at=last_scraped_result.scalar_one_or_none(),
-    )
-    _cache_set(cache_key, response)
-    return response
+    if _stats_summary is not None:
+        return _stats_summary
+    await refresh_stats_summary_cache(db)
+    return _stats_summary
 
 
 @router.get("/stats/daily-counts", response_model=DailyCountsResponse)
