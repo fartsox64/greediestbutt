@@ -64,16 +64,58 @@ Migrations are applied automatically on restart. Postgres data persists in the `
 
 ### Firewall
 
-Restrict port 80 and 443 to Cloudflare's IP ranges so the origin is only reachable through Cloudflare:
+Docker writes `iptables` rules directly, bypassing UFW entirely — `ufw allow`/`deny` rules have no effect on Docker-exposed ports. The approach used here avoids that problem:
+
+1. **`docker-compose.yml` binds Caddy only to `127.0.0.1`** (`127.0.0.1:80:80`). Docker's userspace proxy (`docker-proxy`) then listens on `127.0.0.1:80/443` and forwards to the Caddy container. Nothing is open on the public interface, so non-Cloudflare traffic finds no socket and is refused automatically.
+
+2. **UFW's `before.rules` adds `PREROUTING REDIRECT` rules** that steer inbound traffic from Cloudflare's IP ranges to `127.0.0.1`, where `docker-proxy` is listening. `REDIRECT` without `--to-port` keeps the same port; conntrack restores the source address on return packets automatically.
+
+#### Setup
+
+Allow SSH and enable UFW:
 
 ```bash
-for ip in $(curl -s https://www.cloudflare.com/ips-v4); do ufw allow from $ip to any port 80; done
-for ip in $(curl -s https://www.cloudflare.com/ips-v6); do ufw allow from $ip to any port 80; done
-for ip in $(curl -s https://www.cloudflare.com/ips-v4); do ufw allow from $ip to any port 443; done
-for ip in $(curl -s https://www.cloudflare.com/ips-v6); do ufw allow from $ip to any port 443; done
 ufw allow 22
 ufw enable
 ```
+
+Generate and insert the Cloudflare redirect rules into UFW's nat config, then reload:
+
+> **Warning:** The script below writes a new `before.rules` / `before6.rules` from scratch. If you have existing custom rules in those files, merge them manually instead of running the script as-is.
+
+```bash
+# Write /etc/ufw/before.rules — *nat block (IPv4) followed by the standard *filter content
+{
+  echo "*nat"
+  echo ":PREROUTING ACCEPT [0:0]"
+  for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
+    echo "-A PREROUTING -s $ip -p tcp --dport 80  -j REDIRECT"
+    echo "-A PREROUTING -s $ip -p tcp --dport 443 -j REDIRECT"
+  done
+  echo "COMMIT"
+  echo ""
+  cat /etc/ufw/before.rules
+} > /tmp/ufw-before.rules && sudo mv /tmp/ufw-before.rules /etc/ufw/before.rules
+
+# Write /etc/ufw/before6.rules — same for IPv6
+{
+  echo "*nat"
+  echo ":PREROUTING ACCEPT [0:0]"
+  for ip in $(curl -s https://www.cloudflare.com/ips-v6); do
+    echo "-A PREROUTING -s $ip -p tcp --dport 80  -j REDIRECT"
+    echo "-A PREROUTING -s $ip -p tcp --dport 443 -j REDIRECT"
+  done
+  echo "COMMIT"
+  echo ""
+  cat /etc/ufw/before6.rules
+} > /tmp/ufw-before6.rules && sudo mv /tmp/ufw-before6.rules /etc/ufw/before6.rules
+
+sudo ufw reload
+```
+
+UFW reloads these files on every `ufw reload` or system boot, so the rules are persistent without needing `iptables-persistent`.
+
+> **Note:** Cloudflare's IP ranges change occasionally. Re-run the script and `ufw reload` after fetching updated ranges.
 
 ---
 
