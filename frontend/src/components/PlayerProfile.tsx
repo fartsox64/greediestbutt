@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
-import type { PlayerRun, SortType, User } from "../types";
+import type { PlayerHiddenRun, PlayerRun, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   playerName: string | null;
   sortType: SortType;
   entries: PlayerRun[];
+  hiddenEntries?: PlayerHiddenRun[];
   onBack: () => void;
   avatarUrl?: string;
   currentUser: User | null;
@@ -25,6 +26,7 @@ export function PlayerProfile({
   playerName,
   sortType,
   entries,
+  hiddenEntries,
   onBack,
   avatarUrl,
   currentUser,
@@ -174,6 +176,34 @@ export function PlayerProfile({
           </tbody>
         </table>
       </div>
+
+      {/* Hidden scores — mod/admin only */}
+      {hiddenEntries && hiddenEntries.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
+            Hidden Scores ({hiddenEntries.length})
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-isaac-border text-isaac-muted text-xs uppercase tracking-widest">
+                  <th className="text-left py-3 w-36">Date</th>
+                  <th className="text-right pr-4 py-3 w-20">Rank</th>
+                  <th className="text-right pr-6 py-3 w-40">
+                    {sortType === "score" ? "Score" : "Time"}
+                  </th>
+                  <th className="text-left py-3 w-24">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hiddenEntries.map((entry, idx) => (
+                  <HiddenRunRow key={entry.id} entry={entry} idx={idx} sortType={sortType} onScoreClick={onScoreClick} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -294,6 +324,43 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
         document.body,
       )}
     </>
+  );
+}
+
+function HiddenRunRow({ entry, idx, sortType, onScoreClick }: { entry: PlayerHiddenRun; idx: number; sortType: SortType; onScoreClick: (id: number) => void }) {
+  const rowClass = idx % 2 === 0 ? "bg-isaac-surface" : "bg-transparent";
+  const valueLabel =
+    sortType === "time"
+      ? (entry.time_taken != null ? formatFrames(entry.time_taken) : "—")
+      : (entry.value != null ? entry.value.toLocaleString() : "—");
+  const sourceColor =
+    entry.hidden_source === "automod" ? "text-orange-400 border-orange-400/50" :
+    entry.hidden_source === "report"  ? "text-yellow-400 border-yellow-400/50" :
+                                        "text-isaac-muted border-isaac-border";
+  return (
+    <tr className={`${rowClass} border-b border-isaac-border`}>
+      <td className="py-2.5 pl-2 text-isaac-muted font-mono">
+        {format(parseISO(entry.date), "MMM d, yyyy")}
+      </td>
+      <td className="text-right pr-4 py-2.5 tabular-nums text-isaac-muted font-mono">
+        {entry.rank}
+      </td>
+      <td className="text-right pr-6 py-2.5 tabular-nums font-mono">
+        <button
+          onClick={() => onScoreClick(entry.id)}
+          className="text-isaac-muted hover:text-isaac-accent transition-colors"
+        >
+          {valueLabel}
+        </button>
+      </td>
+      <td className="py-2.5">
+        {entry.hidden_source && (
+          <span className={`text-[10px] uppercase tracking-wider border px-1.5 py-0.5 ${sourceColor}`}>
+            {entry.hidden_source}
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import DailyRun, LeaderboardEntry, Report, SteamPlayerCache, User
+from ..models import DailyRun, GameVersion, LeaderboardEntry, Report, SortType, SteamPlayerCache, User
 from .routes import _cache_invalidate_prefix
 from ..schemas import (
     AdminPlayerResult,
@@ -19,6 +19,8 @@ from ..schemas import (
     HiddenEntryOut,
     ModeratorEntry,
     ModeratorsResponse,
+    PlayerHiddenRunEntry,
+    PlayerHiddenRunsResponse,
     ReportOut,
     ReportSummary,
     ReportsResponse,
@@ -273,6 +275,43 @@ async def unban_player(
     _cache_invalidate_prefix("player:")
     _cache_invalidate_prefix("overall:")
     _cache_invalidate_prefix("profile:")
+
+
+@router.get("/players/{steam_id}/hidden-runs", response_model=PlayerHiddenRunsResponse)
+async def get_player_hidden_runs(
+    steam_id: int,
+    version: GameVersion = Query(...),
+    sort_type: SortType = Query(...),
+    mod=Depends(get_mod_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(LeaderboardEntry, DailyRun.date)
+        .join(DailyRun, LeaderboardEntry.daily_run_id == DailyRun.id)
+        .where(
+            LeaderboardEntry.steam_id == steam_id,
+            LeaderboardEntry.hidden == True,  # noqa: E712
+            DailyRun.version == version,
+            DailyRun.sort_type == sort_type,
+        )
+        .order_by(DailyRun.date.desc())
+    )
+    rows = result.all()
+    entries = [
+        PlayerHiddenRunEntry(
+            date=run_date,
+            hidden_source=entry.hidden_source,
+            **{c: getattr(entry, c) for c in (
+                "id", "rank", "steam_id", "value", "hidden",
+                "stage_bonus", "schwag_bonus", "bluebaby_bonus", "lamb_bonus",
+                "megasatan_bonus", "rush_bonus", "exploration_bonus",
+                "damage_penalty", "time_penalty", "item_penalty",
+                "level", "time_taken", "goal",
+            )},
+        )
+        for entry, run_date in rows
+    ]
+    return PlayerHiddenRunsResponse(entries=entries)
 
 
 # ---------------------------------------------------------------------------

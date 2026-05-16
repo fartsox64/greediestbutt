@@ -16,6 +16,7 @@ import type {
   LeaderboardResponse,
   ModeratorsResponse,
   OverallLeaderboardResponse,
+  PlayerHiddenRun,
   PlayerResponse,
   ProfileResponse,
   ReportsResponse,
@@ -239,6 +240,17 @@ export function fetchHiddenEntries(page: number, pageSize: number): Promise<Hidd
 
 export function unbanPlayer(steamId: string): Promise<void> {
   return apiFetch<void>(`${BASE}/mod/players/${steamId}/unban`, undefined, { method: "POST" });
+}
+
+export function fetchPlayerHiddenRuns(params: {
+  steam_id: string;
+  version: GameVersion;
+  sort_type: SortType;
+}): Promise<{ entries: PlayerHiddenRun[] }> {
+  return apiFetch<{ entries: PlayerHiddenRun[] }>(`${BASE}/mod/players/${params.steam_id}/hidden-runs`, {
+    version: params.version,
+    sort_type: params.sort_type,
+  });
 }
 
 // ---------------------------------------------------------------------------

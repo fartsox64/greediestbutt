@@ -14,6 +14,7 @@ import {
   fetchAllFeedback,
   fetchMyFeedback,
   fetchPendingReports,
+  fetchPlayerHiddenRuns,
   fetchPlayerRuns,
   fetchProfile,
   followPlayer,
@@ -372,6 +373,19 @@ export default function App() {
     staleTime: 5 * 60_000,
   });
 
+  const isMod = user?.role === "admin" || user?.role === "moderator";
+  const playerHiddenQuery = useQuery({
+    queryKey: ["player-hidden", selectedPlayer?.steamId, version, sortType],
+    queryFn: () =>
+      fetchPlayerHiddenRuns({
+        steam_id: selectedPlayer!.steamId,
+        version,
+        sort_type: sortType,
+      }),
+    enabled: selectedPlayer !== null && isMod,
+    staleTime: 5 * 60_000,
+  });
+
   const profileQuery = useQuery({
     queryKey: ["profile", profileSteamId],
     queryFn: () => fetchProfile(profileSteamId!),
@@ -674,6 +688,7 @@ export default function App() {
                 playerName={player.player_name}
                 sortType={player.sort_type}
                 entries={player.entries}
+                hiddenEntries={playerHiddenQuery.data?.entries}
                 onBack={() => window.history.back()}
                 avatarUrl={avatars[player.steam_id]}
                 currentUser={user}

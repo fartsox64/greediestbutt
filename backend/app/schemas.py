@@ -73,6 +73,14 @@ class PlayerRunEntry(LeaderboardEntryOut):
     date: date
 
 
+class PlayerHiddenRunEntry(PlayerRunEntry):
+    hidden_source: str | None = None
+
+
+class PlayerHiddenRunsResponse(BaseModel):
+    entries: list[PlayerHiddenRunEntry]
+
+
 class PlayerResponse(BaseModel):
     steam_id: int
     player_name: str | None

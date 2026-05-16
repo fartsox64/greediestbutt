@@ -33,6 +33,10 @@ export interface PlayerRun extends LeaderboardEntry {
   date: string;
 }
 
+export interface PlayerHiddenRun extends PlayerRun {
+  hidden_source: string | null;
+}
+
 export interface EntryDetail extends LeaderboardEntry {
   date: string;
   version: GameVersion;

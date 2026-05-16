@@ -509,6 +509,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/mod/hidden-entries` | Paginated list of all hidden scores |
 | `POST` | `/api/mod/entries/{id}/hide` | Hide a score (`?source=direct\|report`) |
 | `DELETE` | `/api/mod/entries/{id}/hide` | Unhide a score |
+| `GET` | `/api/mod/players/{steam_id}/hidden-runs` | Hidden runs for a specific player (`?version=&sort_type=`) |
 | `GET` | `/api/mod/reports` | Pending report queue |
 | `POST` | `/api/mod/reports/{id}/dismiss` | Dismiss a report without action |
 
