@@ -319,8 +319,10 @@ docker compose logs -f backend | grep <first-8-chars-of-run-id>
 
 ### Other manual endpoints
 
+All three endpoints below return 202 immediately and run in the background. Progress is visible in the Admin panel's Scheduled Jobs section.
+
 ```bash
-# Scrape today's runs
+# Scrape today's runs (runs in background, returns 202)
 curl -X POST https://yourdomain.com/api/scrape/today \
   -H "X-API-Key: gbt_your_key_here"
 
@@ -328,7 +330,7 @@ curl -X POST https://yourdomain.com/api/scrape/today \
 curl -X POST https://yourdomain.com/api/scrape/backfill-names \
   -H "X-API-Key: gbt_your_key_here"
 
-# Rebuild overall stats cache for all versions/sort types
+# Rebuild overall stats cache for all versions/sort types (runs in background, returns 202)
 curl -X POST https://yourdomain.com/api/scrape/refresh-stats \
   -H "X-API-Key: gbt_your_key_here"
 ```
@@ -521,11 +523,11 @@ All scrape endpoints require admin authentication — pass `Authorization: Beare
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/scrape/today` | Scrape today's runs for all versions |
+| `POST` | `/api/scrape/today` | Scrape today's runs for all versions — returns 202, runs in background |
 | `POST` | `/api/scrape/seed` | Start background seed of all historical data — returns 202 with `run_id` (resumable) |
 | `POST` | `/api/scrape/backfill-names` | Start background player name resolution — returns 202 with `run_id`. Optional `?limit=N` caps the number resolved. |
 | `POST` | `/api/scrape/backfill-rp-time` | Populate `time_taken` for Repentance+ time-sort entries that have NULL (safe to re-run) |
-| `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types |
+| `POST` | `/api/scrape/refresh-stats` | Recompute overall-leaderboard stats for all versions and sort types — returns 202, runs in background |
 | `GET` | `/api/admin/leaderboard-discovery` | Inspect raw Steam leaderboard names |
 
 ### `GET /api/leaderboard` parameters
