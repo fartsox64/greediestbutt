@@ -570,6 +570,8 @@ async def upsert_entries(
 
 _AUTOMOD_VERSIONS = frozenset({
     GameVersion.REPENTANCE,
+    GameVersion.REPENTANCE_PLUS_SOLO,
+    GameVersion.REPENTANCE_PLUS_COOP,
     GameVersion.AFTERBIRTH_PLUS,
     GameVersion.AFTERBIRTH,
 })

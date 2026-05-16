@@ -407,7 +407,7 @@ Moderators and admins can hide individual scores from leaderboards using the **â
 
 ### Auto-moderation
 
-During every scrape, entries with field values that are physically impossible on their version are automatically hidden with source `automod`. The current rules apply to **Repentance, Afterbirth+, and Afterbirth** runs:
+During every scrape, entries with field values that are physically impossible on their version are automatically hidden with source `automod`. The current rules apply to **all versions** (Repentance+, Repentance, Afterbirth+, and Afterbirth):
 
 | Field | Maximum allowed |
 |-------|----------------|
@@ -426,7 +426,7 @@ SET    hidden = true,
        hidden_source = 'automod'
 FROM   daily_runs dr
 WHERE  le.daily_run_id = dr.id
-  AND  dr.version IN ('repentance', 'afterbirth_plus', 'afterbirth')
+  AND  dr.version IN ('repentance', 'repentance_plus_solo', 'repentance_plus_coop', 'afterbirth_plus', 'afterbirth')
   AND  le.hidden = false
   AND  (le.time_penalty > 2147483647 OR le.schwag_bonus > 19150);
 "
