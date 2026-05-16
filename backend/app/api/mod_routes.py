@@ -117,20 +117,20 @@ async def list_hidden_entries(
     HiderCache = aliased(SteamPlayerCache)
     EntryPlayerCache = aliased(SteamPlayerCache)
 
-    # Window function counts all hidden entries per player across the full
-    # result set (evaluated before LIMIT), replacing a separate GROUP BY query.
-    player_hidden_count = func.count().over(
-        partition_by=LeaderboardEntry.steam_id
-    ).label("player_hidden_count")
-    total_count = func.count().over().label("total_count")
+    # Two fast targeted queries rather than window functions over all hidden rows.
+    # Window functions force PostgreSQL to materialise all ~200k hidden rows
+    # before applying LIMIT; these use the ix_le_hidden_at and ix_le_hidden_steam_id
+    # indexes so each touches only the rows it needs.
+    total = await db.scalar(
+        select(func.count()).where(LeaderboardEntry.hidden == True)  # noqa: E712
+    ) or 0
+    total_pages = max(1, math.ceil(total / page_size))
 
     rows_result = await db.execute(
         select(
             LeaderboardEntry, DailyRun.date, DailyRun.version, DailyRun.sort_type,
             HiderCache.player_name.label("hidden_by_name"),
             EntryPlayerCache.player_name.label("entry_player_name"),
-            player_hidden_count,
-            total_count,
         )
         .join(DailyRun, LeaderboardEntry.daily_run_id == DailyRun.id)
         .outerjoin(HiderCache, HiderCache.steam_id == LeaderboardEntry.hidden_by)
@@ -142,8 +142,16 @@ async def list_hidden_entries(
     )
     rows = rows_result.all()
 
-    total = rows[0].total_count if rows else 0
-    total_pages = max(1, math.ceil(total / page_size))
+    # Per-player hidden count for just the steam_ids on this page.
+    page_steam_ids = list({row.LeaderboardEntry.steam_id for row in rows})
+    hidden_counts: dict[int, int] = {}
+    if page_steam_ids:
+        counts_result = await db.execute(
+            select(LeaderboardEntry.steam_id, func.count().label("cnt"))
+            .where(LeaderboardEntry.hidden == True, LeaderboardEntry.steam_id.in_(page_steam_ids))  # noqa: E712
+            .group_by(LeaderboardEntry.steam_id)
+        )
+        hidden_counts = {row.steam_id: row.cnt for row in counts_result}
 
     # Fetch resolved reports for entries hidden via report on this page
     report_entry_ids = [row.LeaderboardEntry.id for row in rows if row.LeaderboardEntry.hidden_source == "report"]
@@ -177,7 +185,7 @@ async def list_hidden_entries(
             hidden_at=row.LeaderboardEntry.hidden_at,
             hidden_source=row.LeaderboardEntry.hidden_source,
             reports=reports_by_entry.get(row.LeaderboardEntry.id, []),
-            auto_banned=row.player_hidden_count >= AUTO_BAN_THRESHOLD,
+            auto_banned=hidden_counts.get(row.LeaderboardEntry.steam_id, 0) >= AUTO_BAN_THRESHOLD,
             level=row.LeaderboardEntry.level,
             stage_bonus=row.LeaderboardEntry.stage_bonus,
             schwag_bonus=row.LeaderboardEntry.schwag_bonus,
@@ -413,6 +421,7 @@ async def grant_moderator(
         raise HTTPException(status_code=400, detail="Cannot change role of an admin")
     user.role = "moderator"
     await db.commit()
+    _cache_invalidate_prefix(f"profile:{steam_id}")
 
 
 @router.delete("/users/{steam_id}/moderator", status_code=204)
@@ -429,6 +438,7 @@ async def revoke_moderator(
         raise HTTPException(status_code=400, detail="Cannot change role of an admin")
     user.role = None
     await db.commit()
+    _cache_invalidate_prefix(f"profile:{steam_id}")
 
 
 @router.get("/moderators", response_model=ModeratorsResponse)
