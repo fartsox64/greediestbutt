@@ -206,15 +206,15 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
     { label: "Mega Satan",  value: entry.megasatan_bonus },
     { label: "Rush",        value: entry.rush_bonus },
     { label: "Exploration", value: entry.exploration_bonus },
-  ].filter((b) => b.value != null);
+  ].filter((b) => b.value != null && b.value !== 0);
 
   const penalties = [
     { label: "Damage", value: entry.damage_penalty },
     { label: "Time",   value: entry.time_penalty },
     { label: "Item",   value: entry.item_penalty },
-  ].filter((p) => p.value != null);
+  ].filter((p) => p.value != null && p.value !== 0);
 
-  const hasDetails = entry.level != null || bonuses.length > 0 || penalties.length > 0;
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
 
   return (
     <>
