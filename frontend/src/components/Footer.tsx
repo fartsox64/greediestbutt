@@ -7,23 +7,12 @@ interface Props {
   onStats: () => void;
 }
 
-const LS_KEY = "gbstats";
-
-function readCached() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? ""); } catch { return undefined; }
-}
-
 export function Footer({ onAbout, onStats }: Props) {
   const { data } = useQuery({
     queryKey: ["stats"],
-    queryFn: async () => {
-      const result = await fetchStats();
-      try { localStorage.setItem(LS_KEY, JSON.stringify(result)); } catch { /* quota */ }
-      return result;
-    },
+    queryFn: fetchStats,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
-    initialData: readCached,
   });
 
   return (
