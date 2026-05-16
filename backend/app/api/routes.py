@@ -685,29 +685,55 @@ async def _require_admin(current_user=Depends(get_current_user)):
     return current_user
 
 
-@router.post("/scrape/today", response_model=ScrapeResult)
+@router.post("/scrape/today", status_code=202)
 async def scrape_today_endpoint(
-    db: AsyncSession = Depends(get_db),
+    request: Request,
     _admin=Depends(_require_admin),
 ):
-    """Fetch and store today's daily run leaderboards for all versions."""
-    stats = await scrape_today(db)
-    _cache_invalidate_prefix("dates:")
-    _cache_invalidate_prefix("leaderboard:")
-    _cache_invalidate_prefix("overall:")
-    _cache_invalidate_prefix("profile:")
-    _cache_invalidate_prefix("player:")
-    _cache_invalidate_prefix("stats:")
-    return ScrapeResult(
-        runs_created=stats["runs_created"],
-        runs_updated=stats["runs_updated"],
-        entries_upserted=stats["entries_upserted"],
-        message=(
-            f"Scraped {stats['runs_created']} new runs, "
-            f"updated {stats['runs_updated']}, "
-            f"upserted {stats['entries_upserted']} entries."
-        ),
-    )
+    """Fetch and store today's daily run leaderboards for all versions.
+
+    Returns immediately; runs in the background. Progress is visible in the
+    scheduler status endpoint (job id: scrape_recent).
+    """
+    job_state: dict = request.app.state.job_state
+
+    async def _run() -> None:
+        t0 = time.monotonic()
+        job_state["scrape_recent"] = {
+            **job_state.get("scrape_recent", {}),
+            "running": True,
+            "last_run_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            async with AsyncSessionLocal() as db:
+                stats = await scrape_today(db)
+                await refresh_stats_summary_cache(db)
+            _cache_invalidate_prefix("dates:")
+            _cache_invalidate_prefix("leaderboard:")
+            _cache_invalidate_prefix("overall:")
+            _cache_invalidate_prefix("profile:")
+            _cache_invalidate_prefix("player:")
+            log.info(
+                "Manual scrape complete — created=%d updated=%d entries=%d",
+                stats["runs_created"], stats["runs_updated"], stats["entries_upserted"],
+            )
+            job_state["scrape_recent"] = {
+                **job_state.get("scrape_recent", {}),
+                "running": False,
+                "last_status": "ok",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
+        except Exception:
+            log.exception("Manual scrape failed")
+            job_state["scrape_recent"] = {
+                **job_state.get("scrape_recent", {}),
+                "running": False,
+                "last_status": "error",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
+
+    asyncio.create_task(_run())
+    return {"message": "Scrape started."}
 
 
 @router.post("/scrape/seed", status_code=202)
@@ -742,6 +768,7 @@ async def seed_endpoint(
 
 @router.post("/scrape/backfill-names", status_code=202)
 async def backfill_names_endpoint(
+    request: Request,
     limit: int | None = None,
     _admin=Depends(_require_admin),
 ):
@@ -749,18 +776,38 @@ async def backfill_names_endpoint(
 
     Returns immediately with a run_id. Track progress in server logs by
     filtering for that ID. Pass ?limit=N to cap the number of names resolved.
+    Progress is also visible in the scheduler status endpoint (job id: backfill_names).
     """
     run_id = str(uuid.uuid4())
+    job_state: dict = request.app.state.job_state
 
     async def _run() -> None:
+        t0 = time.monotonic()
         run_id_var.set(run_id)
+        job_state["backfill_names"] = {
+            **job_state.get("backfill_names", {}),
+            "running": True,
+            "last_run_at": datetime.now(timezone.utc).isoformat(),
+        }
         log.info("Backfill-names started (run_id=%s, limit=%s)", run_id, limit)
         try:
             async with AsyncSessionLocal() as db:
-                await backfill_player_names(db, limit=limit)
-            log.info("Backfill-names complete (run_id=%s)", run_id)
+                resolved = await backfill_player_names(db, limit=limit)
+            log.info("Backfill-names complete (run_id=%s) — %d resolved", run_id, resolved)
+            job_state["backfill_names"] = {
+                **job_state.get("backfill_names", {}),
+                "running": False,
+                "last_status": "ok",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
         except Exception:
             log.exception("Backfill-names failed (run_id=%s)", run_id)
+            job_state["backfill_names"] = {
+                **job_state.get("backfill_names", {}),
+                "running": False,
+                "last_status": "error",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
 
     asyncio.create_task(_run())
     return {"run_id": run_id, "message": f"Backfill started. Filter logs for run_id={run_id[:8]} to follow progress."}

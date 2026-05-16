@@ -15,7 +15,9 @@ import {
   regenerateApiKey,
   reopenFeedback,
   revokeModerator,
+  triggerBackfillNames,
   triggerRefreshStats,
+  triggerScrapeToday,
 } from "../api/client";
 import type { AdminPlayerResult, FeedbackItem, FeedbackThread, ReportOut, SchedulerJob } from "../types";
 import { VERSION_LABELS } from "../types";
@@ -27,9 +29,15 @@ const JOB_LABELS: Record<string, string> = {
   full_stats_refresh: "Stats Refresh",
 };
 
+const JOB_TRIGGERS: Record<string, () => Promise<void>> = {
+  scrape_recent:      triggerScrapeToday,
+  backfill_names:     triggerBackfillNames,
+  full_stats_refresh: triggerRefreshStats,
+};
+
 function ScheduledJobsSection() {
   const queryClient = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
+  const [running, setRunning] = useState<Record<string, boolean>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-scheduler"],
@@ -37,13 +45,15 @@ function ScheduledJobsSection() {
     refetchInterval: 15_000,
   });
 
-  const handleRefreshStats = async () => {
-    setRefreshing(true);
+  const handleRunNow = async (jobId: string) => {
+    const trigger = JOB_TRIGGERS[jobId];
+    if (!trigger) return;
+    setRunning((r) => ({ ...r, [jobId]: true }));
     try {
-      await triggerRefreshStats();
+      await trigger();
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["admin-scheduler"] }), 500);
     } finally {
-      setRefreshing(false);
+      setRunning((r) => ({ ...r, [jobId]: false }));
     }
   };
 
@@ -99,13 +109,13 @@ function ScheduledJobsSection() {
                   )}
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0">
-                  {job.id === "full_stats_refresh" && (
+                  {job.id in JOB_TRIGGERS && (
                     <button
-                      onClick={handleRefreshStats}
-                      disabled={refreshing || job.running}
+                      onClick={() => handleRunNow(job.id)}
+                      disabled={running[job.id] || job.running}
                       className="text-xs border border-isaac-border px-2 py-1 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {refreshing ? "Starting…" : "Run now"}
+                      {running[job.id] ? "Starting…" : "Run now"}
                     </button>
                   )}
                   <div className="flex gap-6 text-xs text-isaac-muted tabular-nums">

@@ -356,6 +356,14 @@ export function fetchSchedulerStatus(): Promise<SchedulerStatusResponse> {
   return apiFetch<SchedulerStatusResponse>(`${BASE}/admin/scheduler`);
 }
 
+export function triggerScrapeToday(): Promise<void> {
+  return apiFetch<void>(`${BASE}/scrape/today`, undefined, { method: "POST" });
+}
+
+export function triggerBackfillNames(): Promise<void> {
+  return apiFetch<void>(`${BASE}/scrape/backfill-names`, undefined, { method: "POST" });
+}
+
 export function triggerRefreshStats(): Promise<void> {
   return apiFetch<void>(`${BASE}/scrape/refresh-stats`, undefined, { method: "POST" });
 }
