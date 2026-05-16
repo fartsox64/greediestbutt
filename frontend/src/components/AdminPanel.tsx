@@ -15,6 +15,7 @@ import {
   regenerateApiKey,
   reopenFeedback,
   revokeModerator,
+  triggerRefreshStats,
 } from "../api/client";
 import type { AdminPlayerResult, FeedbackItem, FeedbackThread, ReportOut, SchedulerJob } from "../types";
 import { VERSION_LABELS } from "../types";
@@ -27,11 +28,24 @@ const JOB_LABELS: Record<string, string> = {
 };
 
 function ScheduledJobsSection() {
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ["admin-scheduler"],
     queryFn: fetchSchedulerStatus,
     refetchInterval: 15_000,
   });
+
+  const handleRefreshStats = async () => {
+    setRefreshing(true);
+    try {
+      await triggerRefreshStats();
+      queryClient.invalidateQueries({ queryKey: ["admin-scheduler"] });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const jobs: SchedulerJob[] = data?.jobs ?? [];
 
@@ -84,14 +98,25 @@ function ScheduledJobsSection() {
                     <span className="text-xs text-isaac-muted font-mono">{job.last_duration_s}s</span>
                   )}
                 </div>
-                <div className="flex gap-6 flex-shrink-0 text-xs text-isaac-muted tabular-nums">
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-wider mb-0.5">Last run</div>
-                    <div>{fmtAgo(job.last_run_at)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-wider mb-0.5">Next run</div>
-                    <div>{fmtIn(job.next_run_at)}</div>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  {job.id === "full_stats_refresh" && (
+                    <button
+                      onClick={handleRefreshStats}
+                      disabled={refreshing || job.running}
+                      className="text-xs border border-isaac-border px-2 py-1 text-isaac-muted hover:text-isaac-text hover:border-isaac-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {refreshing ? "Starting…" : "Run now"}
+                    </button>
+                  )}
+                  <div className="flex gap-6 text-xs text-isaac-muted tabular-nums">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5">Last run</div>
+                      <div>{fmtAgo(job.last_run_at)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5">Next run</div>
+                      <div>{fmtIn(job.next_run_at)}</div>
+                    </div>
                   </div>
                 </div>
               </div>
