@@ -42,7 +42,7 @@ from ..scraper.steam import (
     refresh_overall_stats,
     resolve_player_info,
     run_id_var,
-    scrape_today,
+    scrape_recent,
     seed_all,
     upsert_player_cache,
 )
@@ -706,7 +706,7 @@ async def scrape_today_endpoint(
         }
         try:
             async with AsyncSessionLocal() as db:
-                stats = await scrape_today(db)
+                stats = await scrape_recent(db)
                 await refresh_stats_summary_cache(db)
             _cache_invalidate_prefix("dates:")
             _cache_invalidate_prefix("leaderboard:")
