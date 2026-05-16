@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -565,6 +565,51 @@ async def upsert_entries(
 
 
 # ---------------------------------------------------------------------------
+# Auto-moderation
+# ---------------------------------------------------------------------------
+
+_AUTOMOD_VERSIONS = frozenset({
+    GameVersion.REPENTANCE,
+    GameVersion.AFTERBIRTH_PLUS,
+    GameVersion.AFTERBIRTH,
+})
+_AUTOMOD_MAX_TIME_PENALTY = 2_147_483_647
+_AUTOMOD_MAX_SCHWAG_BONUS = 19_150
+
+
+async def automod_entries(db: AsyncSession, run: DailyRun) -> list[int]:
+    """Hide entries with impossible field values for the given run.
+
+    Checks time_penalty and schwag_bonus bounds that are physically impossible
+    on Repentance, Afterbirth+, and Afterbirth. Returns steam_ids of newly-hidden entries.
+    """
+    if run.version not in _AUTOMOD_VERSIONS:
+        return []
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        update(LeaderboardEntry)
+        .where(
+            LeaderboardEntry.daily_run_id == run.id,
+            LeaderboardEntry.hidden == False,  # noqa: E712
+            or_(
+                LeaderboardEntry.time_penalty > _AUTOMOD_MAX_TIME_PENALTY,
+                LeaderboardEntry.schwag_bonus > _AUTOMOD_MAX_SCHWAG_BONUS,
+            ),
+        )
+        .values(hidden=True, hidden_at=now, hidden_source="automod")
+        .returning(LeaderboardEntry.steam_id)
+    )
+    steam_ids = [row[0] for row in result]
+    if steam_ids:
+        log.info(
+            "automod: hid %d entries on %s %s %s",
+            len(steam_ids), run.date, run.version.value, run.sort_type.value,
+        )
+    return steam_ids
+
+
+# ---------------------------------------------------------------------------
 # High-level scrape operations
 # ---------------------------------------------------------------------------
 
@@ -709,6 +754,7 @@ async def scrape_date_range(
                 player_names = {**names_from_db, **fresh_names}
 
             count = await upsert_entries(db, run, raw_entries)
+            await automod_entries(db, run)
             if not skip_player_info:
                 await upsert_player_cache(db, names=player_names, avatars=new_avatars)
             stats["entries_upserted"] += count

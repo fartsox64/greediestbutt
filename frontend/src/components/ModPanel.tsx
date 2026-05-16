@@ -299,6 +299,10 @@ function HiddenRow({
           <ReportSourceBadge reports={entry.reports} />
         ) : entry.hidden_source === "direct" ? (
           <DirectSourceBadge hiddenByName={entry.hidden_by_name} hiddenAt={entry.hidden_at} />
+        ) : entry.hidden_source === "automod" ? (
+          <span className="text-[10px] uppercase tracking-wider text-orange-400 border border-orange-400/50 px-1.5 py-0.5">
+            automod
+          </span>
         ) : (
           <span className="text-xs text-isaac-muted">—</span>
         )}
