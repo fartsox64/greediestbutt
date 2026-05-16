@@ -156,6 +156,17 @@ class HiddenEntryOut(BaseModel):
     hidden_source: str | None
     reports: list[ReportSummary] = []
     auto_banned: bool
+    level: int | None = None
+    stage_bonus: int | None = None
+    schwag_bonus: int | None = None
+    bluebaby_bonus: int | None = None
+    lamb_bonus: int | None = None
+    megasatan_bonus: int | None = None
+    rush_bonus: int | None = None
+    exploration_bonus: int | None = None
+    damage_penalty: int | None = None
+    time_penalty: int | None = None
+    item_penalty: int | None = None
 
     @field_serializer("steam_id")
     def _steam_id_str(self, v: int) -> str:

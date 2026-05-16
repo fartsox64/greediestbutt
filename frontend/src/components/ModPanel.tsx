@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
 
 type Tab = "hidden" | "reports";
 
-export function ModPanel({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
+export function ModPanel({ onPlayerClick, onScoreClick }: { onPlayerClick: (steamId: string) => void; onScoreClick: (entryId: number) => void }) {
   const [tab, setTab] = useState<Tab>("reports");
 
   return (
@@ -38,7 +38,7 @@ export function ModPanel({ onPlayerClick }: { onPlayerClick: (steamId: string) =
         ))}
       </div>
 
-      {tab === "reports" ? <ReportsTab onPlayerClick={onPlayerClick} /> : <HiddenTab onPlayerClick={onPlayerClick} />}
+      {tab === "reports" ? <ReportsTab onPlayerClick={onPlayerClick} /> : <HiddenTab onPlayerClick={onPlayerClick} onScoreClick={onScoreClick} />}
     </div>
   );
 }
@@ -170,7 +170,7 @@ function ReportCard({
   );
 }
 
-function HiddenTab({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
+function HiddenTab({ onPlayerClick, onScoreClick }: { onPlayerClick: (steamId: string) => void; onScoreClick: (entryId: number) => void }) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -229,7 +229,7 @@ function HiddenTab({ onPlayerClick }: { onPlayerClick: (steamId: string) => void
               </thead>
               <tbody>
                 {data?.entries.map((entry, idx) => (
-                  <HiddenRow key={entry.id} entry={entry} idx={idx} onUnhide={handleUnhide} onPlayerClick={onPlayerClick} />
+                  <HiddenRow key={entry.id} entry={entry} idx={idx} onUnhide={handleUnhide} onPlayerClick={onPlayerClick} onScoreClick={onScoreClick} />
                 ))}
               </tbody>
             </table>
@@ -248,12 +248,15 @@ function HiddenRow({
   idx,
   onUnhide,
   onPlayerClick,
+  onScoreClick,
 }: {
   entry: HiddenEntry;
   idx: number;
   onUnhide: (id: number) => void;
   onPlayerClick: (steamId: string) => void;
+  onScoreClick: (entryId: number) => void;
 }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const rowClass = idx % 2 === 0 ? "bg-isaac-surface" : "bg-transparent";
   const playerLabel = entry.player_name ?? `[${entry.steam_id}]`;
 
@@ -262,8 +265,31 @@ function HiddenRow({
       ? (entry.time_taken != null ? formatFrames(entry.time_taken) : "—")
       : (entry.value != null ? entry.value.toLocaleString() : "—");
 
+  const bonuses = [
+    { label: "Stage",       value: entry.stage_bonus },
+    { label: "Schwag",      value: entry.schwag_bonus },
+    { label: "Blue Baby",   value: entry.bluebaby_bonus },
+    { label: "Lamb",        value: entry.lamb_bonus },
+    { label: "Mega Satan",  value: entry.megasatan_bonus },
+    { label: "Rush",        value: entry.rush_bonus },
+    { label: "Exploration", value: entry.exploration_bonus },
+  ].filter((b) => b.value != null && b.value !== 0);
+
+  const penalties = [
+    { label: "Damage", value: entry.damage_penalty },
+    { label: "Time",   value: entry.time_penalty },
+    { label: "Item",   value: entry.item_penalty },
+  ].filter((p) => p.value != null && p.value !== 0);
+
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
+
   return (
-    <tr className={`${rowClass} border-b border-isaac-border`}>
+    <>
+    <tr
+      className={`${rowClass} border-b border-isaac-border`}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
       <td className="py-2.5 max-w-xs">
         <div className="flex items-center gap-2">
           <button
@@ -291,8 +317,13 @@ function HiddenRow({
       <td className="text-right pr-4 py-2.5 tabular-nums text-isaac-muted font-mono">
         {entry.rank}
       </td>
-      <td className="text-right pr-6 py-2.5 tabular-nums text-isaac-text font-mono">
-        {valueLabel}
+      <td className="text-right pr-6 py-2.5 tabular-nums font-mono">
+        <button
+          onClick={() => onScoreClick(entry.id)}
+          className="text-isaac-text hover:text-isaac-accent transition-colors"
+        >
+          {valueLabel}
+        </button>
       </td>
       <td className="py-2.5">
         {entry.hidden_source === "report" ? (
@@ -319,6 +350,45 @@ function HiddenRow({
         </button>
       </td>
     </tr>
+    {pos && hasDetails && createPortal(
+      <div
+        className="fixed z-50 pointer-events-none bg-isaac-surface border border-isaac-border rounded p-3 text-xs shadow-lg min-w-40"
+        style={{ left: pos.x + 16, top: pos.y - 8 }}
+      >
+        {entry.level != null && entry.level !== 0 && (
+          <div className="mb-2 text-isaac-muted">
+            Floor <span className="text-isaac-text font-mono">{entry.level}</span>
+            {entry.time_taken != null && (
+              <> · <span className="text-isaac-text font-mono">{formatFrames(entry.time_taken)}</span></>
+            )}
+          </div>
+        )}
+        {bonuses.length > 0 && (
+          <div className={penalties.length > 0 ? "mb-2" : ""}>
+            <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Bonuses</div>
+            {bonuses.map((b) => (
+              <div key={b.label} className="flex justify-between gap-6">
+                <span className="text-isaac-muted">{b.label}</span>
+                <span className="text-green-400 font-mono tabular-nums">+{b.value!.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {penalties.length > 0 && (
+          <div>
+            <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Penalties</div>
+            {penalties.map((p) => (
+              <div key={p.label} className="flex justify-between gap-6">
+                <span className="text-isaac-muted">{p.label}</span>
+                <span className="text-red-400 font-mono tabular-nums">−{p.value!.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>,
+      document.body,
+    )}
+    </>
   );
 }
 

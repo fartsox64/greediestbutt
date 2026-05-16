@@ -174,6 +174,17 @@ async def list_hidden_entries(
             hidden_source=row.LeaderboardEntry.hidden_source,
             reports=reports_by_entry.get(row.LeaderboardEntry.id, []),
             auto_banned=hidden_counts.get(row.LeaderboardEntry.steam_id, 0) >= AUTO_BAN_THRESHOLD,
+            level=row.LeaderboardEntry.level,
+            stage_bonus=row.LeaderboardEntry.stage_bonus,
+            schwag_bonus=row.LeaderboardEntry.schwag_bonus,
+            bluebaby_bonus=row.LeaderboardEntry.bluebaby_bonus,
+            lamb_bonus=row.LeaderboardEntry.lamb_bonus,
+            megasatan_bonus=row.LeaderboardEntry.megasatan_bonus,
+            rush_bonus=row.LeaderboardEntry.rush_bonus,
+            exploration_bonus=row.LeaderboardEntry.exploration_bonus,
+            damage_penalty=row.LeaderboardEntry.damage_penalty,
+            time_penalty=row.LeaderboardEntry.time_penalty,
+            item_penalty=row.LeaderboardEntry.item_penalty,
         )
         for row in rows
     ]

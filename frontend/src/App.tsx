@@ -594,7 +594,7 @@ export default function App() {
             : <InsufficientPermissions />
         ) : view === "mod" ? (
           (user?.role === "admin" || user?.role === "moderator")
-            ? <ModPanel onPlayerClick={handleProfileClick} />
+            ? <ModPanel onPlayerClick={handleProfileClick} onScoreClick={handleScoreClick} />
             : <InsufficientPermissions />
         ) : view === "profile" ? (
           profileQuery.isLoading ? (

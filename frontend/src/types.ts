@@ -123,9 +123,20 @@ export interface HiddenEntry {
   hidden_by: string | null;
   hidden_by_name: string | null;
   hidden_at: string | null;
-  hidden_source: "direct" | "report" | null;
+  hidden_source: "direct" | "report" | "automod" | null;
   reports: ReportSummary[];
   auto_banned: boolean;
+  level: number | null;
+  stage_bonus: number | null;
+  schwag_bonus: number | null;
+  bluebaby_bonus: number | null;
+  lamb_bonus: number | null;
+  megasatan_bonus: number | null;
+  rush_bonus: number | null;
+  exploration_bonus: number | null;
+  damage_penalty: number | null;
+  time_penalty: number | null;
+  item_penalty: number | null;
 }
 
 export interface HiddenEntriesResponse {
