@@ -221,6 +221,7 @@ class ProfileResponse(BaseModel):
     following_count: int
     role: str | None
     stats: list[ProfileRunTypeStats]
+    is_banned: bool = False
 
     model_config = {"from_attributes": True}
 

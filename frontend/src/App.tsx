@@ -22,6 +22,7 @@ import {
   hideEntry,
   revokeModerator,
   setToken,
+  unbanPlayer,
   submitReport,
   unfollowPlayer,
 } from "./api/client";
@@ -310,6 +311,14 @@ export default function App() {
   const handleRevokeModerator = async (steamId: string) => {
     await revokeModerator(steamId);
     queryClient.invalidateQueries({ queryKey: ["profile", steamId] });
+  };
+
+  const handleUnban = async (steamId: string) => {
+    await unbanPlayer(steamId);
+    queryClient.invalidateQueries({ queryKey: ["profile", steamId] });
+    queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+    queryClient.invalidateQueries({ queryKey: ["overall-leaderboard"] });
+    queryClient.invalidateQueries({ queryKey: ["player"] });
   };
 
   // ---------------------------------------------------------------------------
@@ -610,6 +619,7 @@ export default function App() {
               onUnfollow={handleUnfollow}
               onGrantModerator={handleGrantModerator}
               onRevokeModerator={handleRevokeModerator}
+              onUnban={handleUnban}
               onViewRunHistory={handleViewRunHistory}
               onBack={() => window.history.back()}
             />

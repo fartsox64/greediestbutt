@@ -237,6 +237,10 @@ export function fetchHiddenEntries(page: number, pageSize: number): Promise<Hidd
   return apiFetch<HiddenEntriesResponse>(`${BASE}/mod/hidden-entries`, { page, page_size: pageSize });
 }
 
+export function unbanPlayer(steamId: string): Promise<void> {
+  return apiFetch<void>(`${BASE}/mod/players/${steamId}/unban`, undefined, { method: "POST" });
+}
+
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------

@@ -168,6 +168,7 @@ export interface ProfileResponse {
   following_count: number;
   role: string | null;
   stats: ProfileRunTypeStats[];
+  is_banned: boolean;
 }
 
 export interface ReportOut {

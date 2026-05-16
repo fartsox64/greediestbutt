@@ -15,7 +15,7 @@ from sqlalchemy.orm import aliased
 from ..auth import get_current_user
 from ..database import AsyncSessionLocal, get_db
 from ..models import DailyRun, Follow, GameVersion, LeaderboardEntry, PlayerOverallStats, SortType, SteamPlayerCache, User, VERSION_ORDER
-from .filters import visible_entries_filter
+from .filters import AUTO_BAN_THRESHOLD, visible_entries_filter
 from ..schemas import (
     AvailableDatesResponse,
     AvatarsResponse,
@@ -489,6 +489,14 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
         key=lambda s: (version_rank.get(s.version, 99), s.sort_type),
     )
 
+    hidden_count_result = await db.execute(
+        select(func.count()).where(
+            LeaderboardEntry.steam_id == steam_id,
+            LeaderboardEntry.hidden == True,  # noqa: E712
+        )
+    )
+    hidden_count = hidden_count_result.scalar_one()
+
     result = ProfileResponse(
         steam_id=steam_id,
         player_name=player_name,
@@ -497,6 +505,7 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
         following_count=following_count,
         role=role,
         stats=stats,
+        is_banned=hidden_count >= AUTO_BAN_THRESHOLD,
     )
     _cache_set(cache_key, result)
     return result

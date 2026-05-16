@@ -252,6 +252,28 @@ async def unhide_entry(
 
 
 # ---------------------------------------------------------------------------
+# Player unban
+# ---------------------------------------------------------------------------
+
+@router.post("/players/{steam_id}/unban", status_code=204)
+async def unban_player(
+    steam_id: int,
+    admin=Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        update(LeaderboardEntry)
+        .where(LeaderboardEntry.steam_id == steam_id, LeaderboardEntry.hidden == True)  # noqa: E712
+        .values(hidden=False, hidden_by=None, hidden_at=None, hidden_source=None)
+    )
+    await db.commit()
+    _cache_invalidate_prefix("leaderboard:")
+    _cache_invalidate_prefix("player:")
+    _cache_invalidate_prefix("overall:")
+    _cache_invalidate_prefix("profile:")
+
+
+# ---------------------------------------------------------------------------
 # Reports — mod queue (pending only)
 # ---------------------------------------------------------------------------
 
