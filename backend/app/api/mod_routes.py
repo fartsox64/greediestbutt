@@ -67,9 +67,10 @@ _REPORT_COLS = (
     _ReviewerCache.player_name.label("reviewer_name"),
 )
 
-def _report_base_query():
+def _report_base_query(with_total: bool = False):
+    cols = (*_REPORT_COLS, func.count().over().label("total_count")) if with_total else _REPORT_COLS
     return (
-        select(*_REPORT_COLS)
+        select(*cols)
         .join(LeaderboardEntry, Report.entry_id == LeaderboardEntry.id)
         .join(DailyRun, LeaderboardEntry.daily_run_id == DailyRun.id)
         .outerjoin(_EntryCache, _EntryCache.steam_id == LeaderboardEntry.steam_id)
@@ -109,27 +110,25 @@ async def list_hidden_entries(
     mod=Depends(get_mod_user),
     db: AsyncSession = Depends(get_db),
 ):
-    count_result = await db.execute(
-        select(func.count()).where(LeaderboardEntry.hidden == True)  # noqa: E712
-    )
-    total = count_result.scalar_one()
-    total_pages = max(1, math.ceil(total / page_size))
     offset = (page - 1) * page_size
-
-    counts_result = await db.execute(
-        select(LeaderboardEntry.steam_id, func.count().label("cnt"))
-        .where(LeaderboardEntry.hidden == True)  # noqa: E712
-        .group_by(LeaderboardEntry.steam_id)
-    )
-    hidden_counts: dict[int, int] = {row.steam_id: row.cnt for row in counts_result}
 
     HiderCache = aliased(SteamPlayerCache)
     EntryPlayerCache = aliased(SteamPlayerCache)
+
+    # Window function counts all hidden entries per player across the full
+    # result set (evaluated before LIMIT), replacing a separate GROUP BY query.
+    player_hidden_count = func.count().over(
+        partition_by=LeaderboardEntry.steam_id
+    ).label("player_hidden_count")
+    total_count = func.count().over().label("total_count")
+
     rows_result = await db.execute(
         select(
             LeaderboardEntry, DailyRun.date, DailyRun.version, DailyRun.sort_type,
             HiderCache.player_name.label("hidden_by_name"),
             EntryPlayerCache.player_name.label("entry_player_name"),
+            player_hidden_count,
+            total_count,
         )
         .join(DailyRun, LeaderboardEntry.daily_run_id == DailyRun.id)
         .outerjoin(HiderCache, HiderCache.steam_id == LeaderboardEntry.hidden_by)
@@ -140,6 +139,9 @@ async def list_hidden_entries(
         .limit(page_size)
     )
     rows = rows_result.all()
+
+    total = rows[0].total_count if rows else 0
+    total_pages = max(1, math.ceil(total / page_size))
 
     # Fetch resolved reports for entries hidden via report on this page
     report_entry_ids = [row.LeaderboardEntry.id for row in rows if row.LeaderboardEntry.hidden_source == "report"]
@@ -173,7 +175,7 @@ async def list_hidden_entries(
             hidden_at=row.LeaderboardEntry.hidden_at,
             hidden_source=row.LeaderboardEntry.hidden_source,
             reports=reports_by_entry.get(row.LeaderboardEntry.id, []),
-            auto_banned=hidden_counts.get(row.LeaderboardEntry.steam_id, 0) >= AUTO_BAN_THRESHOLD,
+            auto_banned=row.player_hidden_count >= AUTO_BAN_THRESHOLD,
             level=row.LeaderboardEntry.level,
             stage_bonus=row.LeaderboardEntry.stage_bonus,
             schwag_bonus=row.LeaderboardEntry.schwag_bonus,
@@ -284,21 +286,17 @@ async def list_pending_reports(
     mod=Depends(get_mod_user),
     db: AsyncSession = Depends(get_db),
 ):
-    count_result = await db.execute(
-        select(func.count()).select_from(Report).where(Report.status == "pending")
-    )
-    total = count_result.scalar_one()
-    total_pages = max(1, math.ceil(total / page_size))
     offset = (page - 1) * page_size
-
     rows_result = await db.execute(
-        _report_base_query()
+        _report_base_query(with_total=True)
         .where(Report.status == "pending")
         .order_by(Report.created_at.asc())
         .offset(offset)
         .limit(page_size)
     )
     rows = rows_result.all()
+    total = rows[0].total_count if rows else 0
+    total_pages = max(1, math.ceil(total / page_size))
     return ReportsResponse(
         reports=[_row_to_report_out(r) for r in rows],
         total=total,
@@ -337,21 +335,17 @@ async def list_all_reports(
     db: AsyncSession = Depends(get_db),
 ):
     where_clause = Report.status == status if status else True  # type: ignore[arg-type]
-    count_result = await db.execute(
-        select(func.count()).select_from(Report).where(where_clause)
-    )
-    total = count_result.scalar_one()
-    total_pages = max(1, math.ceil(total / page_size))
     offset = (page - 1) * page_size
-
     rows_result = await db.execute(
-        _report_base_query()
+        _report_base_query(with_total=True)
         .where(where_clause)
         .order_by(Report.created_at.desc())
         .offset(offset)
         .limit(page_size)
     )
     rows = rows_result.all()
+    total = rows[0].total_count if rows else 0
+    total_pages = max(1, math.ceil(total / page_size))
     return ReportsResponse(
         reports=[_row_to_report_out(r) for r in rows],
         total=total,
