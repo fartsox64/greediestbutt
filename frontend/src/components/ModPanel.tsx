@@ -329,7 +329,7 @@ function HiddenRow({
         {entry.hidden_source === "report" ? (
           <ReportSourceBadge reports={entry.reports} />
         ) : entry.hidden_source === "direct" ? (
-          <DirectSourceBadge hiddenByName={entry.hidden_by_name} hiddenAt={entry.hidden_at} />
+          <DirectSourceBadge hiddenByName={entry.hidden_by_name} hiddenByRole={entry.hidden_by_role} hiddenAt={entry.hidden_at} />
         ) : entry.hidden_source === "automod" ? (
           <span className="text-[10px] uppercase tracking-wider text-orange-400 border border-orange-400/50 px-1.5 py-0.5">
             automod
@@ -392,9 +392,11 @@ function HiddenRow({
   );
 }
 
-function DirectSourceBadge({ hiddenByName, hiddenAt }: { hiddenByName: string | null; hiddenAt: string | null }) {
+function DirectSourceBadge({ hiddenByName, hiddenByRole, hiddenAt }: { hiddenByName: string | null; hiddenByRole: string | null; hiddenAt: string | null }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
+
+  const displayName = hiddenByRole === "admin" ? "Admin" : (hiddenByName ?? "Unknown");
 
   const handleMouseEnter = () => {
     if (!badgeRef.current) return;
@@ -419,7 +421,7 @@ function DirectSourceBadge({ hiddenByName, hiddenAt }: { hiddenByName: string | 
         >
           <div className="text-xs text-isaac-text">
             <span className="text-isaac-muted">Hidden by </span>
-            <span className="font-medium">{hiddenByName ?? "Unknown"}</span>
+            <span className="font-medium">{displayName}</span>
             {hiddenAt && (
               <>
                 <span className="text-isaac-muted"> on </span>

@@ -116,6 +116,7 @@ async def list_hidden_entries(
 
     HiderCache = aliased(SteamPlayerCache)
     EntryPlayerCache = aliased(SteamPlayerCache)
+    HiderUser = aliased(User)
 
     # Two fast targeted queries rather than window functions over all hidden rows.
     # Window functions force PostgreSQL to materialise all ~200k hidden rows
@@ -131,10 +132,12 @@ async def list_hidden_entries(
             LeaderboardEntry, DailyRun.date, DailyRun.version, DailyRun.sort_type,
             HiderCache.player_name.label("hidden_by_name"),
             EntryPlayerCache.player_name.label("entry_player_name"),
+            HiderUser.role.label("hidden_by_role"),
         )
         .join(DailyRun, LeaderboardEntry.daily_run_id == DailyRun.id)
         .outerjoin(HiderCache, HiderCache.steam_id == LeaderboardEntry.hidden_by)
         .outerjoin(EntryPlayerCache, EntryPlayerCache.steam_id == LeaderboardEntry.steam_id)
+        .outerjoin(HiderUser, HiderUser.steam_id == LeaderboardEntry.hidden_by)
         .where(LeaderboardEntry.hidden == True)  # noqa: E712
         .order_by(LeaderboardEntry.hidden_at.desc(), LeaderboardEntry.id.desc())
         .offset(offset)
@@ -184,6 +187,7 @@ async def list_hidden_entries(
             hidden_by_name=row.hidden_by_name,
             hidden_at=row.LeaderboardEntry.hidden_at,
             hidden_source=row.LeaderboardEntry.hidden_source,
+            hidden_by_role=row.hidden_by_role,
             reports=reports_by_entry.get(row.LeaderboardEntry.id, []),
             auto_banned=hidden_counts.get(row.LeaderboardEntry.steam_id, 0) >= AUTO_BAN_THRESHOLD,
             level=row.LeaderboardEntry.level,

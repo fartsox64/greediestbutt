@@ -162,6 +162,7 @@ class HiddenEntryOut(BaseModel):
     hidden_by_name: str | None
     hidden_at: datetime | None
     hidden_source: str | None
+    hidden_by_role: str | None = None
     reports: list[ReportSummary] = []
     auto_banned: bool
     level: int | None = None

@@ -128,6 +128,7 @@ export interface HiddenEntry {
   hidden_by_name: string | null;
   hidden_at: string | null;
   hidden_source: "direct" | "report" | "automod" | null;
+  hidden_by_role: string | null;
   reports: ReportSummary[];
   auto_banned: boolean;
   level: number | null;
