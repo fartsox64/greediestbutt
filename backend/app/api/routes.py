@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -794,22 +795,51 @@ async def backfill_rp_time_endpoint(
     return {"entries_updated": updated}
 
 
-@router.post("/scrape/refresh-stats")
+@router.post("/scrape/refresh-stats", status_code=202)
 async def refresh_stats_endpoint(
-    db: AsyncSession = Depends(get_db),
+    request: Request,
     _admin=Depends(_require_admin),
 ):
     """Rebuild the overall leaderboard stats cache for all version/sort combinations.
 
-    Runs automatically after each scrape. Call manually after bulk data changes
-    (seeding, mass hide/unhide) to ensure the overall leaderboard is up to date.
+    Returns immediately; runs in the background. Progress is visible in the
+    scheduler status endpoint (job id: full_stats_refresh).
     """
-    total = 0
-    for v in GameVersion:
-        for st in SortType:
-            total += await refresh_overall_stats(db, v, st)
-    _cache_invalidate_prefix("overall:")
-    return {"rows_upserted": total}
+    job_state: dict = request.app.state.job_state
+
+    async def _run() -> None:
+        t0 = time.monotonic()
+        job_state["full_stats_refresh"] = {
+            **job_state.get("full_stats_refresh", {}),
+            "running": True,
+            "last_run_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            total = 0
+            async with AsyncSessionLocal() as db:
+                for v in GameVersion:
+                    for st in SortType:
+                        total += await refresh_overall_stats(db, v, st)
+                await refresh_stats_summary_cache(db)
+            _cache_invalidate_prefix("overall:")
+            log.info("Manual stats refresh complete — %d rows upserted", total)
+            job_state["full_stats_refresh"] = {
+                **job_state.get("full_stats_refresh", {}),
+                "running": False,
+                "last_status": "ok",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
+        except Exception:
+            log.exception("Manual stats refresh failed")
+            job_state["full_stats_refresh"] = {
+                **job_state.get("full_stats_refresh", {}),
+                "running": False,
+                "last_status": "error",
+                "last_duration_s": round(time.monotonic() - t0, 1),
+            }
+
+    asyncio.create_task(_run())
+    return {"message": "Stats refresh started."}
 
 
 # ---------------------------------------------------------------------------

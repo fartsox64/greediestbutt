@@ -41,7 +41,7 @@ function ScheduledJobsSection() {
     setRefreshing(true);
     try {
       await triggerRefreshStats();
-      queryClient.invalidateQueries({ queryKey: ["admin-scheduler"] });
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["admin-scheduler"] }), 500);
     } finally {
       setRefreshing(false);
     }
