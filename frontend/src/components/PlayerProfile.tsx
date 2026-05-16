@@ -224,10 +224,10 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
         onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
         onMouseLeave={() => setHovered(false)}
       >
-        <td className="py-2.5 text-isaac-muted font-mono">
+        <td className="py-2.5 pl-2 font-mono">
           <button
             onClick={() => onDateClick(entry.date, entry.rank)}
-            className="hover:text-isaac-accent transition-colors"
+            className="text-isaac-text hover:text-isaac-accent transition-colors"
           >
             {format(parseISO(entry.date), "MMM d, yyyy")}
           </button>
