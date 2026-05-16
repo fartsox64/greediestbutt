@@ -375,6 +375,7 @@ There are two privileged roles: `admin` and `moderator`. Admins can do everythin
 | View hidden scores (mod panel) | ✓ | ✓ |
 | Review and dismiss user reports | ✓ | ✓ |
 | Grant / revoke moderator role | — | ✓ |
+| Unban a player (restore all hidden scores) | — | ✓ |
 | View and respond to user feedback | — | ✓ |
 | Reopen closed feedback threads | — | ✓ |
 | Admin panel (including API key) | — | ✓ |
@@ -404,9 +405,40 @@ Once an admin is set, additional moderators can be managed through the in-app **
 
 Moderators and admins can hide individual scores from leaderboards using the **✕** button that appears on each row when logged in with a privileged role. Hidden scores are excluded from rankings and the ranks of remaining scores are renumbered without gaps.
 
+### Auto-moderation
+
+During every scrape, entries with field values that are physically impossible on their version are automatically hidden with source `automod`. The current rules apply to **Repentance, Afterbirth+, and Afterbirth** runs:
+
+| Field | Maximum allowed |
+|-------|----------------|
+| `time_penalty` | 2,147,483,647 |
+| `schwag_bonus` | 19,150 |
+
+Automod-hidden entries count toward the auto-ban threshold the same as manually hidden ones.
+
+To retroactively apply these rules to scores already in the database:
+
+```bash
+docker compose exec db psql -U postgres -d greediest_butt -c "
+UPDATE leaderboard_entries le
+SET    hidden = true,
+       hidden_at = now(),
+       hidden_source = 'automod'
+FROM   daily_runs dr
+WHERE  le.daily_run_id = dr.id
+  AND  dr.version IN ('repentance', 'afterbirth_plus', 'afterbirth')
+  AND  le.hidden = false
+  AND  (le.time_penalty > 2147483647 OR le.schwag_bonus > 19150);
+"
+```
+
 ### Auto-ban
 
 If a player accumulates **5 or more hidden scores**, all of their scores are automatically hidden and they are excluded from all leaderboards. This threshold is defined by `AUTO_BAN_THRESHOLD` in `backend/app/api/filters.py`.
+
+### Unbanning a player
+
+Admins can unban a player from the player's profile page. Clicking **Unban** restores all of their hidden scores to visibility and removes them from the auto-ban exclusion list. The button is only shown when the player currently meets the auto-ban threshold.
 
 ### User reports
 
@@ -489,6 +521,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/mod/players/search` | Search all known players |
 | `POST` | `/api/mod/users/{steam_id}/moderator` | Grant moderator role |
 | `DELETE` | `/api/mod/users/{steam_id}/moderator` | Revoke moderator role |
+| `POST` | `/api/mod/players/{steam_id}/unban` | Restore all hidden scores for a player |
 | `GET` | `/api/admin/api-key` | Get current API key (auto-generates if expired) |
 | `POST` | `/api/admin/api-key/regenerate` | Issue a new API key, invalidating the current one |
 | `GET` | `/api/admin/scheduler` | Current status of all scheduled jobs (last run, next run, running flag) |
