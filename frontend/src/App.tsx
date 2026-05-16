@@ -186,8 +186,8 @@ export default function App() {
   };
   const handleDateClick = (date: string, rank: number) => {
     const p = Math.ceil(rank / pageSize);
-    setView("overall"); setSelectedPlayer(null); setSelectedDate(date); setPage(p);
-    writeUrl({ ...snap(), view: "overall", selectedPlayer: null, selectedDate: date, entryId: null }, false);
+    setView("daily"); setSelectedPlayer(null); setSelectedDate(date); setPage(p);
+    writeUrl({ ...snap(), view: "daily", selectedPlayer: null, selectedDate: date, entryId: null }, false);
   };
   const handleViewRunHistory = (steamId: string, version: GameVersion, sortType: SortType, playerName: string | null) => {
     const player = { steamId, playerName };
