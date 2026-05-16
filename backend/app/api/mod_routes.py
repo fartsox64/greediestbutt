@@ -212,6 +212,8 @@ async def hide_entry(
         .values(status="resolved", reviewed_by=mod.steam_id, reviewed_at=now)
     )
     await db.commit()
+    _cache_invalidate_prefix("leaderboard:")
+    _cache_invalidate_prefix("player:")
     _cache_invalidate_prefix("overall:")
     _cache_invalidate_prefix("profile:")
 
@@ -232,6 +234,8 @@ async def unhide_entry(
     entry.hidden_by = None
     entry.hidden_at = None
     await db.commit()
+    _cache_invalidate_prefix("leaderboard:")
+    _cache_invalidate_prefix("player:")
     _cache_invalidate_prefix("overall:")
     _cache_invalidate_prefix("profile:")
 

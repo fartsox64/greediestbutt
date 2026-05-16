@@ -242,12 +242,21 @@ export default function App() {
     queryClient.invalidateQueries({ queryKey: ["friends-leaderboard"] });
   };
 
-  const handleHide = async (entryId: number) => {
-    await hideEntry(entryId);
-    queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
-    queryClient.invalidateQueries({ queryKey: ["friends-leaderboard"] });
-    queryClient.invalidateQueries({ queryKey: ["player"] });
-    queryClient.invalidateQueries({ queryKey: ["pending-reports-count"] });
+  const handleHide = (entryId: number) => {
+    queryClient.setQueriesData<{ entries: { id: number }[] }>(
+      { queryKey: ["player"], exact: false },
+      (old) => old ? { ...old, entries: old.entries.filter((e) => e.id !== entryId) } : old,
+    );
+    queryClient.setQueriesData<{ entries: { id: number }[] }>(
+      { queryKey: ["leaderboard"], exact: false },
+      (old) => old ? { ...old, entries: old.entries.filter((e) => e.id !== entryId) } : old,
+    );
+    hideEntry(entryId).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["friends-leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["player"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-reports-count"] });
+    });
   };
 
   const pendingReportsQuery = useQuery({
