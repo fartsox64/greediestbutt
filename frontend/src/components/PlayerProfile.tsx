@@ -17,6 +17,7 @@ interface Props {
   onUnfollow: (steamId: string) => void;
   onHide: (entryId: number) => void;
   onScoreClick: (entryId: number) => void;
+  onDateClick: (date: string, rank: number) => void;
 }
 
 export function PlayerProfile({
@@ -32,6 +33,7 @@ export function PlayerProfile({
   onUnfollow,
   onHide,
   onScoreClick,
+  onDateClick,
 }: Props) {
   const playerLabel = playerName ?? `[${steamId}]`;
   const mediumAvatarUrl = avatarUrl ? avatarUrl.replace(".jpg", "_medium.jpg") : undefined;
@@ -167,7 +169,7 @@ export function PlayerProfile({
           </thead>
           <tbody>
             {entries.map((entry, idx) => (
-              <RunRow key={entry.date} entry={entry} idx={idx} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} />
+              <RunRow key={entry.date} entry={entry} idx={idx} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} />
             ))}
           </tbody>
         </table>
@@ -176,7 +178,7 @@ export function PlayerProfile({
   );
 }
 
-function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick }: { entry: PlayerRun; idx: number; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void }) {
+function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateClick }: { entry: PlayerRun; idx: number; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void; onDateClick: (date: string, rank: number) => void }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -223,7 +225,12 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick }: { entry
         onMouseLeave={() => setHovered(false)}
       >
         <td className="py-2.5 text-isaac-muted font-mono">
-          {format(parseISO(entry.date), "MMM d, yyyy")}
+          <button
+            onClick={() => onDateClick(entry.date, entry.rank)}
+            className="hover:text-isaac-accent transition-colors"
+          >
+            {format(parseISO(entry.date), "MMM d, yyyy")}
+          </button>
         </td>
         <td className={`text-right pr-4 py-2.5 tabular-nums ${rankClass}`}>
           {entry.rank}

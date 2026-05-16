@@ -184,6 +184,11 @@ export default function App() {
     writeUrl({ ...snap(), view: "entry", entryId: id }, false);
     setView("entry"); setEntryId(id);
   };
+  const handleDateClick = (date: string, rank: number) => {
+    const p = Math.ceil(rank / pageSize);
+    setView("overall"); setSelectedPlayer(null); setSelectedDate(date); setPage(p);
+    writeUrl({ ...snap(), view: "overall", selectedPlayer: null, selectedDate: date, entryId: null }, false);
+  };
   const handleViewRunHistory = (steamId: string, version: GameVersion, sortType: SortType, playerName: string | null) => {
     const player = { steamId, playerName };
     writeUrl({ ...snap(), view: "overall", version, sortType, selectedPlayer: player, profileSteamId: null }, false);
@@ -658,6 +663,7 @@ export default function App() {
                 onUnfollow={handleUnfollow}
                 onHide={handleHide}
                 onScoreClick={handleScoreClick}
+                onDateClick={handleDateClick}
               />
             ) : null}
           </>
