@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
 
 type Tab = "hidden" | "reports";
 
-export function ModPanel() {
+export function ModPanel({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
   const [tab, setTab] = useState<Tab>("reports");
 
   return (
@@ -38,12 +38,12 @@ export function ModPanel() {
         ))}
       </div>
 
-      {tab === "reports" ? <ReportsTab /> : <HiddenTab />}
+      {tab === "reports" ? <ReportsTab onPlayerClick={onPlayerClick} /> : <HiddenTab onPlayerClick={onPlayerClick} />}
     </div>
   );
 }
 
-function ReportsTab() {
+function ReportsTab({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -97,6 +97,7 @@ function ReportsTab() {
                 report={report}
                 onDismiss={handleDismiss}
                 onHideScore={handleHideScore}
+                onPlayerClick={onPlayerClick}
               />
             ))}
           </div>
@@ -113,10 +114,12 @@ function ReportCard({
   report,
   onDismiss,
   onHideScore,
+  onPlayerClick,
 }: {
   report: ReportOut;
   onDismiss: (reportId: number) => void;
   onHideScore: (entryId: number) => void;
+  onPlayerClick: (steamId: string) => void;
 }) {
   const playerLabel = report.entry_player_name ?? `[${report.entry_steam_id}]`;
   const reporterLabel = report.reporter_name ?? `[${report.reporter_steam_id}]`;
@@ -128,7 +131,12 @@ function ReportCard({
           <div className="text-xs text-isaac-muted">
             <span className="text-isaac-text font-medium">{reporterLabel}</span>
             {" reported "}
-            <span className="text-isaac-accent">{playerLabel}</span>
+            <button
+              onClick={() => onPlayerClick(report.entry_steam_id)}
+              className="text-isaac-accent hover:underline"
+            >
+              {playerLabel}
+            </button>
             {" · "}
             <span className="font-mono">{VERSION_LABELS[report.entry_version]}</span>
             {" · "}
@@ -162,7 +170,7 @@ function ReportCard({
   );
 }
 
-function HiddenTab() {
+function HiddenTab({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -221,7 +229,7 @@ function HiddenTab() {
               </thead>
               <tbody>
                 {data?.entries.map((entry, idx) => (
-                  <HiddenRow key={entry.id} entry={entry} idx={idx} onUnhide={handleUnhide} />
+                  <HiddenRow key={entry.id} entry={entry} idx={idx} onUnhide={handleUnhide} onPlayerClick={onPlayerClick} />
                 ))}
               </tbody>
             </table>
@@ -239,10 +247,12 @@ function HiddenRow({
   entry,
   idx,
   onUnhide,
+  onPlayerClick,
 }: {
   entry: HiddenEntry;
   idx: number;
   onUnhide: (id: number) => void;
+  onPlayerClick: (steamId: string) => void;
 }) {
   const rowClass = idx % 2 === 0 ? "bg-isaac-surface" : "bg-transparent";
   const playerLabel = entry.player_name ?? `[${entry.steam_id}]`;
@@ -256,7 +266,12 @@ function HiddenRow({
     <tr className={`${rowClass} border-b border-isaac-border`}>
       <td className="py-2.5 max-w-xs">
         <div className="flex items-center gap-2">
-          <span className="truncate text-isaac-text">{playerLabel}</span>
+          <button
+            onClick={() => onPlayerClick(entry.steam_id)}
+            className="truncate text-isaac-text hover:text-isaac-accent hover:underline transition-colors text-left"
+          >
+            {playerLabel}
+          </button>
           {entry.auto_banned && (
             <span className="flex-shrink-0 text-[10px] uppercase tracking-wider text-red-400 border border-red-400/50 px-1 py-0.5">
               banned
