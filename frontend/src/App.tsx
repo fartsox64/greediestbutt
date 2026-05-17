@@ -17,6 +17,7 @@ import {
   fetchPlayerHiddenRuns,
   fetchPlayerRuns,
   fetchProfile,
+  banPlayer,
   followPlayer,
   getToken,
   grantModerator,
@@ -312,6 +313,14 @@ export default function App() {
   const handleRevokeModerator = async (steamId: string) => {
     await revokeModerator(steamId);
     queryClient.invalidateQueries({ queryKey: ["profile", steamId] });
+  };
+
+  const handleBan = async (steamId: string) => {
+    await banPlayer(steamId);
+    queryClient.invalidateQueries({ queryKey: ["profile", steamId] });
+    queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+    queryClient.invalidateQueries({ queryKey: ["overall-leaderboard"] });
+    queryClient.invalidateQueries({ queryKey: ["player"] });
   };
 
   const handleUnban = async (steamId: string) => {
@@ -633,6 +642,7 @@ export default function App() {
               onUnfollow={handleUnfollow}
               onGrantModerator={handleGrantModerator}
               onRevokeModerator={handleRevokeModerator}
+              onBan={handleBan}
               onUnban={handleUnban}
               onViewRunHistory={handleViewRunHistory}
               onBack={() => window.history.back()}

@@ -271,12 +271,41 @@ async def unhide_entry(
 # Player unban
 # ---------------------------------------------------------------------------
 
+@router.post("/players/{steam_id}/ban", status_code=204)
+async def ban_player(
+    steam_id: int,
+    mod=Depends(get_mod_user),
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.now(timezone.utc)
+    result = await db.execute(select(User).where(User.steam_id == steam_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(steam_id=steam_id, created_at=now)
+        db.add(user)
+    user.banned_at = now
+    await db.execute(
+        update(LeaderboardEntry)
+        .where(LeaderboardEntry.steam_id == steam_id, LeaderboardEntry.hidden == False)  # noqa: E712
+        .values(hidden=True, hidden_by=mod.steam_id, hidden_at=now, hidden_source="direct")
+    )
+    await db.commit()
+    _cache_invalidate_prefix("leaderboard:")
+    _cache_invalidate_prefix("player:")
+    _cache_invalidate_prefix("overall:")
+    _cache_invalidate_prefix("profile:")
+
+
 @router.post("/players/{steam_id}/unban", status_code=204)
 async def unban_player(
     steam_id: int,
     admin=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
+    result = await db.execute(select(User).where(User.steam_id == steam_id))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        user.banned_at = None
     await db.execute(
         update(LeaderboardEntry)
         .where(LeaderboardEntry.steam_id == steam_id, LeaderboardEntry.hidden == True)  # noqa: E712

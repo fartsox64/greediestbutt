@@ -135,6 +135,7 @@ class User(Base):
     steam_id = Column(BigInteger, primary_key=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
     role = Column(String(20), nullable=True)  # 'admin' or 'moderator'
+    banned_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Report(Base):

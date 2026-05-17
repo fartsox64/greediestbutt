@@ -10,6 +10,7 @@ interface Props {
   onUnfollow: (steamId: string) => void;
   onGrantModerator: (steamId: string) => void;
   onRevokeModerator: (steamId: string) => void;
+  onBan: (steamId: string) => void;
   onUnban: (steamId: string) => void;
   onViewRunHistory: (steamId: string, version: GameVersion, sortType: SortType, playerName: string | null) => void;
   onBack: () => void;
@@ -23,6 +24,7 @@ export function UserProfile({
   onUnfollow,
   onGrantModerator,
   onRevokeModerator,
+  onBan,
   onUnban,
   onViewRunHistory,
   onBack,
@@ -32,6 +34,7 @@ export function UserProfile({
     ? profile.avatar_url.replace(".jpg", "_medium.jpg")
     : undefined;
   const isSelf = currentUser?.steam_id === profile.steam_id;
+  const isMod = currentUser?.role === "admin" || currentUser?.role === "moderator";
 
   const totalRuns = profile.stats.reduce((s, r) => s + r.runs_played, 0);
   const totalWins = profile.stats.reduce((s, r) => s + r.wins, 0);
@@ -86,6 +89,14 @@ export function UserProfile({
               Make Moderator
             </button>
           )
+        )}
+        {isMod && !isSelf && profile.role !== "admin" && !profile.is_banned && (
+          <button
+            onClick={() => onBan(profile.steam_id)}
+            className="flex-shrink-0 text-xs border border-red-400/50 px-3 py-1.5 text-red-400 hover:bg-red-400/10 transition-colors"
+          >
+            Ban User
+          </button>
         )}
         {currentUser?.role === "admin" && !isSelf && profile.is_banned && (
           <button

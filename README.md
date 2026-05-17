@@ -374,6 +374,7 @@ There are two privileged roles: `admin` and `moderator`. Admins can do everythin
 | Hide / unhide leaderboard scores | ✓ | ✓ |
 | View hidden scores (mod panel) | ✓ | ✓ |
 | Review and dismiss user reports | ✓ | ✓ |
+| Ban a player (hide all scores) | ✓ | ✓ |
 | Grant / revoke moderator role | — | ✓ |
 | Unban a player (restore all hidden scores) | — | ✓ |
 | View and respond to user feedback | — | ✓ |
@@ -436,9 +437,34 @@ WHERE  le.daily_run_id = dr.id
 
 If a player accumulates **5 or more hidden scores**, all of their scores are automatically hidden and they are excluded from all leaderboards. This threshold is defined by `AUTO_BAN_THRESHOLD` in `backend/app/api/filters.py`.
 
+### Banning a player manually
+
+Moderators and admins can ban a player directly from the player's profile page using the **Ban User** button. Banning hides all of the player's visible scores and records a `banned_at` timestamp on the user. The button is shown for any non-admin, non-banned player.
+
+After deploying migration 021, backfill `banned_at` for players already auto-banned in production:
+
+```bash
+docker compose exec db psql -U postgres -d greediest_butt -c "
+WITH fifth_hide AS (
+  SELECT steam_id, hidden_at
+  FROM (
+    SELECT steam_id, hidden_at,
+           ROW_NUMBER() OVER (PARTITION BY steam_id ORDER BY hidden_at ASC) AS rn
+    FROM leaderboard_entries
+    WHERE hidden = true
+  ) ranked
+  WHERE rn = 5
+)
+UPDATE users
+SET banned_at = fifth_hide.hidden_at
+FROM fifth_hide
+WHERE users.steam_id = fifth_hide.steam_id;
+"
+```
+
 ### Unbanning a player
 
-Admins can unban a player from the player's profile page. Clicking **Unban** restores all of their hidden scores to visibility and removes them from the auto-ban exclusion list. The button is only shown when the player currently meets the auto-ban threshold.
+Admins can unban a player from the player's profile page. Clicking **Unban** restores all of their hidden scores to visibility and clears the `banned_at` flag. The button is shown only when the player is currently banned (either manually or via the auto-ban threshold).
 
 ### User reports
 
@@ -509,6 +535,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/mod/hidden-entries` | Paginated list of all hidden scores |
 | `POST` | `/api/mod/entries/{id}/hide` | Hide a score (`?source=direct\|report`) |
 | `DELETE` | `/api/mod/entries/{id}/hide` | Unhide a score |
+| `POST` | `/api/mod/players/{steam_id}/ban` | Hide all scores for a player and set `banned_at` |
 | `GET` | `/api/mod/players/{steam_id}/hidden-runs` | Hidden runs for a specific player (`?version=&sort_type=`) |
 | `GET` | `/api/mod/reports` | Pending report queue |
 | `POST` | `/api/mod/reports/{id}/dismiss` | Dismiss a report without action |

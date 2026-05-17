@@ -456,9 +456,11 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
     avatar_url = avatar_result.scalar_one_or_none()
 
     role_result = await db.execute(
-        select(User.role).where(User.steam_id == steam_id)
+        select(User.role, User.banned_at).where(User.steam_id == steam_id)
     )
-    role = role_result.scalar_one_or_none()
+    user_row = role_result.one_or_none()
+    role = user_row.role if user_row else None
+    banned_at = user_row.banned_at if user_row else None
 
     # Fetch goals ordered by date per version/sort_type for streak computation
     streak_result = await db.execute(
@@ -505,7 +507,7 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
         following_count=following_count,
         role=role,
         stats=stats,
-        is_banned=hidden_count >= AUTO_BAN_THRESHOLD,
+        is_banned=banned_at is not None or hidden_count >= AUTO_BAN_THRESHOLD,
     )
     _cache_set(cache_key, result)
     return result
