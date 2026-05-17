@@ -455,10 +455,12 @@ WITH fifth_hide AS (
   ) ranked
   WHERE rn = 5
 )
-UPDATE users
-SET banned_at = fifth_hide.hidden_at
-FROM fifth_hide
-WHERE users.steam_id = fifth_hide.steam_id;
+INSERT INTO users (steam_id, created_at, banned_at)
+SELECT fh.steam_id, now(), fh.hidden_at
+FROM fifth_hide fh
+ON CONFLICT (steam_id) DO UPDATE
+  SET banned_at = EXCLUDED.banned_at
+  WHERE users.banned_at IS NULL;
 "
 ```
 
