@@ -179,6 +179,10 @@ export default function App() {
     writeUrl({ ...snap(), view: v, selectedPlayer: null, profileSteamId: null }, false);
     setView(v); setSelectedPlayer(null); setProfileSteamId(null); setPage(1);
   };
+  const handleHomeClick = () => {
+    writeUrl({ view: "daily", version, sortType, selectedDate: null, selectedPlayer: null, profileSteamId: null, entryId: null }, false);
+    setView("daily"); setSelectedPlayer(null); setProfileSteamId(null); setSelectedDate(null); setEntryId(null); setPage(1);
+  };
   const handleProfileClick = (steamId: string) => {
     writeUrl({ ...snap(), view: "profile", profileSteamId: steamId, selectedPlayer: null }, false);
     setView("profile"); setProfileSteamId(steamId); setSelectedPlayer(null);
@@ -454,15 +458,17 @@ export default function App() {
   return (
     <div className="min-h-screen bg-isaac-bg text-isaac-text">
       {/* Header */}
-      <header className="border-b border-isaac-border bg-isaac-surface">
+      <header className="sticky top-0 z-40 border-b border-isaac-border bg-isaac-surface">
         <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6 flex flex-wrap items-end justify-between gap-y-3">
           <div>
-            <h1 className="font-title text-isaac-accent text-lg leading-relaxed tracking-wide">
-              GreediestButt
-            </h1>
-            <p className="text-isaac-muted text-xs mt-1">
-              The Binding of Isaac · Daily Run Leaderboards
-            </p>
+            <button onClick={handleHomeClick} className="text-left">
+              <h1 className="font-title text-isaac-accent text-lg leading-relaxed tracking-wide hover:opacity-80 transition-opacity">
+                GreediestButt
+              </h1>
+              <p className="text-isaac-muted text-xs mt-1">
+                The Binding of Isaac · Daily Run Leaderboards
+              </p>
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Daily / Overall toggle */}
