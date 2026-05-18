@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
-import type { PlayerHiddenRun, PlayerRun, SortType, User } from "../types";
+import type { GameVersion, PlayerHiddenRun, PlayerRun, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
+import { calcHitsTaken } from "../utils";
 
 interface Props {
   steamId: string;
   playerName: string | null;
+  version: GameVersion;
   sortType: SortType;
   entries: PlayerRun[];
   hiddenEntries?: PlayerHiddenRun[];
@@ -24,6 +26,7 @@ interface Props {
 export function PlayerProfile({
   steamId,
   playerName,
+  version,
   sortType,
   entries,
   hiddenEntries,
@@ -171,7 +174,7 @@ export function PlayerProfile({
           </thead>
           <tbody>
             {entries.map((entry, idx) => (
-              <RunRow key={entry.date} entry={entry} idx={idx} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} />
+              <RunRow key={entry.date} entry={entry} idx={idx} version={version} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} />
             ))}
           </tbody>
         </table>
@@ -208,7 +211,7 @@ export function PlayerProfile({
   );
 }
 
-function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateClick }: { entry: PlayerRun; idx: number; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void; onDateClick: (date: string, rank: number) => void }) {
+function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, onDateClick }: { entry: PlayerRun; idx: number; version: GameVersion; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void; onDateClick: (date: string, rank: number) => void }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -244,7 +247,8 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
     { label: "Item",   value: entry.item_penalty },
   ].filter((p) => p.value != null && p.value !== 0);
 
-  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
+  const hitsTaken = calcHitsTaken(version, entry.damage_penalty, entry.exploration_bonus);
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null;
 
   return (
     <>
@@ -299,7 +303,7 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
             </div>
           )}
           {bonuses.length > 0 && (
-            <div className={penalties.length > 0 ? "mb-2" : ""}>
+            <div className={penalties.length > 0 || hitsTaken != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Bonuses</div>
               {bonuses.map((b) => (
                 <div key={b.label} className="flex justify-between gap-6">
@@ -310,7 +314,7 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
             </div>
           )}
           {penalties.length > 0 && (
-            <div>
+            <div className={hitsTaken != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Penalties</div>
               {penalties.map((p) => (
                 <div key={p.label} className="flex justify-between gap-6">
@@ -318,6 +322,12 @@ function RunRow({ entry, idx, sortType, canHide, onHide, onScoreClick, onDateCli
                   <span className="text-red-400 font-mono tabular-nums">−{p.value!.toLocaleString()}</span>
                 </div>
               ))}
+            </div>
+          )}
+          {hitsTaken != null && (
+            <div className="flex justify-between gap-6 border-t border-isaac-border pt-2 mt-1">
+              <span className="text-isaac-muted">Hits taken</span>
+              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
             </div>
           )}
         </div>,

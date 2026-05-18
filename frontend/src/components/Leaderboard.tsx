@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import type { LeaderboardEntry, SortType, User } from "../types";
+import type { GameVersion, LeaderboardEntry, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
-import { safeHttpsUrl } from "../utils";
+import { calcHitsTaken, safeHttpsUrl } from "../utils";
 
 interface Props {
   entries: LeaderboardEntry[];
+  version: GameVersion;
   sortType: SortType;
   pageOffset: number;
   avatars: Record<string, string>;
@@ -22,6 +23,7 @@ interface Props {
 
 export function Leaderboard({
   entries,
+  version,
   sortType,
   pageOffset,
   avatars,
@@ -62,6 +64,7 @@ export function Leaderboard({
                   key={entry.steam_id}
                   entry={entry}
                   idx={idx}
+                  version={version}
                   sortType={sortType}
                   avatarUrl={avatars[entry.steam_id]}
                   currentUser={currentUser}
@@ -96,6 +99,7 @@ export function Leaderboard({
                 key={entry.steam_id}
                 entry={entry}
                 idx={pageOffset + idx}
+                version={version}
                 sortType={sortType}
                 avatarUrl={avatars[entry.steam_id]}
                 currentUser={currentUser}
@@ -117,6 +121,7 @@ export function Leaderboard({
 interface RowProps {
   entry: LeaderboardEntry;
   idx: number;
+  version: GameVersion;
   sortType: SortType;
   avatarUrl?: string;
   currentUser: User | null;
@@ -129,7 +134,7 @@ interface RowProps {
   onScoreClick: (entryId: number) => void;
 }
 
-function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlayerClick, onFollow, onUnfollow, onHide, onReport, onScoreClick }: RowProps) {
+function Row({ entry, idx, version, sortType, avatarUrl, currentUser, isFollowing, onPlayerClick, onFollow, onUnfollow, onHide, onReport, onScoreClick }: RowProps) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -169,7 +174,8 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
     { label: "Item",   value: entry.item_penalty },
   ].filter((p) => p.value != null && p.value !== 0);
 
-  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
+  const hitsTaken = calcHitsTaken(version, entry.damage_penalty, entry.exploration_bonus);
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null;
   const isSelf = currentUser?.steam_id === entry.steam_id;
   const canReport = !!currentUser && !currentUser.role && !isSelf;
   const avatarSrc = safeHttpsUrl(avatarUrl);
@@ -254,7 +260,7 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
             </div>
           )}
           {bonuses.length > 0 && (
-            <div className={penalties.length > 0 ? "mb-2" : ""}>
+            <div className={penalties.length > 0 || hitsTaken != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Bonuses</div>
               {bonuses.map((b) => (
                 <div key={b.label} className="flex justify-between gap-6">
@@ -265,7 +271,7 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
             </div>
           )}
           {penalties.length > 0 && (
-            <div>
+            <div className={hitsTaken != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Penalties</div>
               {penalties.map((p) => (
                 <div key={p.label} className="flex justify-between gap-6">
@@ -273,6 +279,12 @@ function Row({ entry, idx, sortType, avatarUrl, currentUser, isFollowing, onPlay
                   <span className="text-red-400 font-mono tabular-nums">−{p.value!.toLocaleString()}</span>
                 </div>
               ))}
+            </div>
+          )}
+          {hitsTaken != null && (
+            <div className="flex justify-between gap-6 border-t border-isaac-border pt-2 mt-1">
+              <span className="text-isaac-muted">Hits taken</span>
+              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
             </div>
           )}
         </div>,

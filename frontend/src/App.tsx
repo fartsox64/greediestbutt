@@ -669,6 +669,7 @@ export default function App() {
               <>
                 <Leaderboard
                   entries={lb.entries}
+                  version={lb.version}
                   sortType={lb.sort_type}
                   pageOffset={pageOffset}
                   avatars={avatars}
@@ -696,6 +697,7 @@ export default function App() {
               <PlayerProfile
                 steamId={player.steam_id}
                 playerName={player.player_name}
+                version={player.version}
                 sortType={player.sort_type}
                 entries={player.entries}
                 hiddenEntries={playerHiddenQuery.data?.entries}

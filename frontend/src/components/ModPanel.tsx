@@ -11,6 +11,7 @@ import {
 } from "../api/client";
 import { Pagination } from "./Pagination";
 import type { HiddenEntry, ReportOut, ReportSummary } from "../types";
+import { calcHitsTaken } from "../utils";
 import { VERSION_LABELS } from "../types";
 
 const PAGE_SIZE = 50;
@@ -281,7 +282,8 @@ function HiddenRow({
     { label: "Item",   value: entry.item_penalty },
   ].filter((p) => p.value != null && p.value !== 0);
 
-  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0;
+  const hitsTaken = calcHitsTaken(entry.version, entry.damage_penalty, entry.exploration_bonus);
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null;
 
   return (
     <>
@@ -375,7 +377,7 @@ function HiddenRow({
           </div>
         )}
         {penalties.length > 0 && (
-          <div>
+          <div className={hitsTaken != null ? "mb-2" : ""}>
             <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Penalties</div>
             {penalties.map((p) => (
               <div key={p.label} className="flex justify-between gap-6">
@@ -383,6 +385,12 @@ function HiddenRow({
                 <span className="text-red-400 font-mono tabular-nums">−{p.value!.toLocaleString()}</span>
               </div>
             ))}
+          </div>
+        )}
+        {hitsTaken != null && (
+          <div className="flex justify-between gap-6 border-t border-isaac-border pt-2 mt-1">
+            <span className="text-isaac-muted">Hits taken</span>
+            <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
           </div>
         )}
       </div>,

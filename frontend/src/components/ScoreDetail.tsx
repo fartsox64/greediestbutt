@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import type { EntryDetail } from "../types";
 import { VERSION_LABELS } from "../types";
-import { safeHttpsUrl } from "../utils";
+import { calcHitsTaken, safeHttpsUrl } from "../utils";
 
 interface Props {
   entry: EntryDetail;
@@ -40,6 +40,8 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
     { label: "Time",   value: entry.time_penalty },
     { label: "Item",   value: entry.item_penalty },
   ].filter((p) => p.value != null && p.value !== 0);
+
+  const hitsTaken = calcHitsTaken(entry.version, entry.damage_penalty, entry.exploration_bonus);
 
   const rankClass =
     entry.rank === 1 ? "text-isaac-gold" :
@@ -153,6 +155,16 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
                   <span className="text-red-400 font-mono tabular-nums">−{p.value!.toLocaleString()}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Hits taken */}
+        {hitsTaken != null && (
+          <div className="border-t border-isaac-border pt-5">
+            <div className="flex justify-between gap-8 text-sm">
+              <span className="text-isaac-muted">Hits taken</span>
+              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
             </div>
           </div>
         )}
