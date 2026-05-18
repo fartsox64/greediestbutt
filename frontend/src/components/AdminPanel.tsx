@@ -715,7 +715,7 @@ function FeedbackRow({ item }: { item: FeedbackItem }) {
                   onChange={(e) => setReplyBody(e.target.value)}
                   rows={2}
                   placeholder="Reply…"
-                  className="w-full bg-transparent border border-isaac-border text-isaac-text text-sm px-3 py-2 placeholder-isaac-muted focus:outline-none focus:border-isaac-accent resize-none"
+                  className="w-full bg-transparent border border-isaac-border text-isaac-text text-sm px-3 py-2 placeholder-isaac-muted focus:outline-none focus:border-isaac-accent resize-y"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <div className="flex items-center justify-between">
