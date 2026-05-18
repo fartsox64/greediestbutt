@@ -643,6 +643,7 @@ async def get_available_dates(
             DailyRun.version == version,
             DailyRun.sort_type == sort_type,
             DailyRun.total_entries > 0,
+            DailyRun.date <= datetime.now(timezone(timedelta(hours=-10))).date(),
         )
         .order_by(DailyRun.date.desc())
     )
