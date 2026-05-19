@@ -202,8 +202,9 @@ async def get_leaderboard(
 # ---------------------------------------------------------------------------
 
 @router.get("/entry/{entry_id}", response_model=EntryDetailOut)
-async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    is_mod = current_user is not None and current_user.role in ("admin", "moderator")
+    q = (
         select(
             LeaderboardEntry,
             DailyRun.date,
@@ -215,8 +216,10 @@ async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db)):
         .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
         .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
         .where(LeaderboardEntry.id == entry_id)
-        .where(LeaderboardEntry.hidden.is_(False))
     )
+    if not is_mod:
+        q = q.where(LeaderboardEntry.hidden.is_(False))
+    result = await db.execute(q)
     row = result.first()
     if row is None:
         raise HTTPException(status_code=404, detail="Entry not found")
