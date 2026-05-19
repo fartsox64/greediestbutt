@@ -57,9 +57,22 @@ export function UserProfile({
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
-        <h2 className="font-title text-isaac-accent text-sm leading-relaxed truncate">
-          {playerLabel}
-        </h2>
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="font-title text-isaac-accent text-sm leading-relaxed truncate min-w-0">
+            {playerLabel}
+          </h2>
+          <a
+            href={`https://steamcommunity.com/profiles/${profile.steam_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-isaac-muted hover:text-isaac-accent transition-colors"
+            title="View Steam profile"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39l3.05-6.3a3.5 3.5 0 0 1-.76-.46 3.47 3.47 0 0 1-1.25-2.67 3.48 3.48 0 0 1 3.48-3.48c.95 0 1.81.38 2.44 1l5.95-2.43C20.3 5.9 16.46 3 12 3V0zm0 3c3.62 0 6.79 1.76 8.77 4.47l-5.95 2.43A3.48 3.48 0 0 0 12.73 9h-.01a3.48 3.48 0 0 0-3.25 2.24L5.5 9.67A9 9 0 0 1 12 3zm-6.5 6.67 3.97 1.56a3.48 3.48 0 0 0 2.3 4.6l-3.06 6.3A9 9 0 0 1 3 12c0-1.01.17-1.97.5-2.88v.55zm7.23 1.83a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z"/>
+            </svg>
+          </a>
+        </div>
         {currentUser && !isSelf && (
           <div className="flex-shrink-0 flex items-center gap-1.5 border border-isaac-border px-2 py-1">
             <FollowButton
