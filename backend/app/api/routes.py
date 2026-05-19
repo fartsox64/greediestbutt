@@ -204,13 +204,36 @@ async def get_leaderboard(
 @router.get("/entry/{entry_id}", response_model=EntryDetailOut)
 async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     is_mod = current_user is not None and current_user.role in ("admin", "moderator")
+
+    le_inner = aliased(LeaderboardEntry)
+    le_count = aliased(LeaderboardEntry)
+    adj_rank_sq = (
+        select(func.count() + 1)
+        .where(
+            le_inner.daily_run_id == LeaderboardEntry.daily_run_id,
+            le_inner.rank < LeaderboardEntry.rank,
+            le_inner.hidden == False,
+        )
+        .scalar_subquery()
+    )
+    visible_count_sq = (
+        select(func.count())
+        .select_from(le_count)
+        .where(
+            le_count.daily_run_id == LeaderboardEntry.daily_run_id,
+            le_count.hidden == False,
+        )
+        .scalar_subquery()
+    )
+
     q = (
         select(
             LeaderboardEntry,
             DailyRun.date,
             DailyRun.version,
             DailyRun.sort_type,
-            DailyRun.total_entries,
+            adj_rank_sq.label("adj_rank"),
+            visible_count_sq.label("visible_count"),
             SteamPlayerCache.player_name,
         )
         .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
@@ -223,10 +246,10 @@ async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_u
     row = result.first()
     if row is None:
         raise HTTPException(status_code=404, detail="Entry not found")
-    entry, run_date, version, sort_type, total_entries, player_name = row
+    entry, run_date, version, sort_type, adj_rank, visible_count, player_name = row
     return EntryDetailOut(
         id=entry.id,
-        rank=entry.rank,
+        rank=adj_rank,
         steam_id=entry.steam_id,
         player_name=player_name,
         value=entry.value,
@@ -247,7 +270,7 @@ async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_u
         date=run_date,
         version=version,
         sort_type=sort_type,
-        total_entries=total_entries,
+        total_entries=visible_count,
     )
 
 
