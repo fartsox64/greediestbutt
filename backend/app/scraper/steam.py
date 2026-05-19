@@ -576,7 +576,7 @@ _AUTOMOD_VERSIONS = frozenset({
     GameVersion.AFTERBIRTH,
 })
 _AUTOMOD_MAX_TIME_PENALTY = 2_147_483_647
-_AUTOMOD_MAX_SCHWAG_BONUS = 19_150
+_AUTOMOD_MAX_SCHWAG_BONUS = 16_329
 
 
 async def automod_entries(db: AsyncSession, run: DailyRun) -> list[int]:
