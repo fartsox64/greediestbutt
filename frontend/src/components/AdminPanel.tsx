@@ -219,7 +219,7 @@ function ApiKeySection() {
 }
 
 
-export function AdminPanel() {
+export function AdminPanel({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
   const queryClient = useQueryClient();
 
   const { data: modsData, isLoading } = useQuery({
@@ -292,7 +292,7 @@ export function AdminPanel() {
       <AllReports />
 
       {/* All feedback */}
-      <AllFeedback />
+      <AllFeedback onPlayerClick={onPlayerClick} />
     </div>
   );
 }
@@ -530,7 +530,7 @@ type FeedbackStatusFilter = "all" | "open" | "closed";
 
 const FEEDBACK_PAGE_SIZE = 20;
 
-function AllFeedback() {
+function AllFeedback({ onPlayerClick }: { onPlayerClick: (steamId: string) => void }) {
   const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>("open");
   const [page, setPage] = useState(1);
 
@@ -583,7 +583,7 @@ function AllFeedback() {
         <>
           <div className="space-y-2">
             {data?.items.map((item) => (
-              <FeedbackRow key={item.id} item={item} />
+              <FeedbackRow key={item.id} item={item} onPlayerClick={onPlayerClick} />
             ))}
           </div>
           {data && data.total_pages > 1 && (
@@ -595,7 +595,7 @@ function AllFeedback() {
   );
 }
 
-function FeedbackRow({ item }: { item: FeedbackItem }) {
+function FeedbackRow({ item, onPlayerClick }: { item: FeedbackItem; onPlayerClick: (steamId: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -658,7 +658,7 @@ function FeedbackRow({ item }: { item: FeedbackItem }) {
             {item.subject ?? <span className="text-isaac-muted italic">no subject</span>}
           </div>
           <div className="text-xs text-isaac-muted">
-            from <span className="text-isaac-text">{authorLabel}</span>
+            from <button onClick={(e) => { e.stopPropagation(); onPlayerClick(item.author_steam_id); }} className="text-isaac-text hover:text-isaac-accent transition-colors">{authorLabel}</button>
             {item.message_count > 0 && (
               <> · {item.message_count} {item.message_count === 1 ? "reply" : "replies"}</>
             )}

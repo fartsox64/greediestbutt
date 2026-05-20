@@ -628,7 +628,7 @@ export default function App() {
           <AboutPage currentUser={user} />
         ) : view === "admin" ? (
           user?.role === "admin"
-            ? <AdminPanel />
+            ? <AdminPanel onPlayerClick={handleProfileClick} />
             : <InsufficientPermissions />
         ) : view === "mod" ? (
           (user?.role === "admin" || user?.role === "moderator")
