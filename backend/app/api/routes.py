@@ -207,12 +207,20 @@ async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_u
 
     le_inner = aliased(LeaderboardEntry)
     le_count = aliased(LeaderboardEntry)
+    auto_banned_sq = (
+        select(LeaderboardEntry.steam_id)
+        .where(LeaderboardEntry.hidden == True)  # noqa: E712
+        .group_by(LeaderboardEntry.steam_id)
+        .having(func.count() >= AUTO_BAN_THRESHOLD)
+        .scalar_subquery()
+    )
     adj_rank_sq = (
         select(func.count() + 1)
         .where(
             le_inner.daily_run_id == LeaderboardEntry.daily_run_id,
             le_inner.rank < LeaderboardEntry.rank,
             le_inner.hidden == False,
+            le_inner.steam_id.notin_(auto_banned_sq),
         )
         .scalar_subquery()
     )
@@ -222,6 +230,7 @@ async def get_entry(entry_id: int, db: AsyncSession = Depends(get_db), current_u
         .where(
             le_count.daily_run_id == LeaderboardEntry.daily_run_id,
             le_count.hidden == False,
+            le_count.steam_id.notin_(auto_banned_sq),
         )
         .scalar_subquery()
     )
