@@ -102,7 +102,12 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
             <div className={`text-3xl font-mono tabular-nums font-bold ${rankClass}`}>
               {valueLabel}
             </div>
-            <div className={`text-sm mt-1 ${rankClass}`}>
+            <div className={`text-sm mt-1 flex items-center justify-end gap-1.5 ${rankClass}`}>
+              {entry.rank <= 3 && (
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current flex-shrink-0" aria-hidden="true">
+                  <path d="M19 5h-1V3H6v2H5C3.3 5 2 6.3 2 8v1c0 1.9 1.4 3.4 3.2 3.9.6 1.5 1.8 2.7 3.3 3.3V18H7v2h10v-2h-1.5v-1.8c1.5-.6 2.7-1.8 3.3-3.3C20.6 12.4 22 10.9 22 9V8c0-1.7-1.3-3-3-3zM4 9V8h2v3.8C4.8 11.4 4 10.3 4 9zm16 0c0 1.3-.8 2.4-2 2.8V8h2v1z"/>
+                </svg>
+              )}
               Rank #{entry.rank}
               {entry.total_entries != null && (
                 <span className="text-isaac-muted"> of {entry.total_entries.toLocaleString()}</span>
