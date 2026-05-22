@@ -605,6 +605,7 @@ async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
             func.sum(case((PlayerRun.rank > OpponentRun.rank, 1), else_=0)).label("losses"),
             func.sum(case((PlayerRun.rank == OpponentRun.rank, 1), else_=0)).label("ties"),
         )
+        .select_from(OpponentRun)
         .join(PlayerRun, and_(
             PlayerRun.daily_run_id == OpponentRun.daily_run_id,
             PlayerRun.steam_id == steam_id,
