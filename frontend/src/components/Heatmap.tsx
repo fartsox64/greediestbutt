@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { parseISO, format, eachDayOfInterval, subYears, startOfDay } from "date-fns";
+import { format, eachDayOfInterval, subYears, startOfDay } from "date-fns";
 
 interface Props {
   dates: Record<string, number>;
