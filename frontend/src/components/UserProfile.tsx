@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import type { GameVersion, ProfileResponse, ProfileRunTypeStats, SortType, User } from "../types";
 import { VERSION_LABELS } from "../types";
 import { FollowButton } from "./FollowButton";
+import { Heatmap } from "./Heatmap";
+import { fetchHeatmap } from "../api/client";
 
 interface Props {
   profile: ProfileResponse;
@@ -38,6 +41,11 @@ export function UserProfile({
 
   const totalRuns = profile.stats.reduce((s, r) => s + r.runs_played, 0);
   const totalWins = profile.stats.reduce((s, r) => s + r.wins, 0);
+
+  const heatmapQuery = useQuery({
+    queryKey: ["heatmap", profile.steam_id, null, "score"],
+    queryFn: () => fetchHeatmap(profile.steam_id, undefined, "score"),
+  });
 
   return (
     <div className="space-y-6">
@@ -135,6 +143,14 @@ export function UserProfile({
           </div>
         ))}
       </div>
+
+      {/* Activity heatmap — score runs, all versions */}
+      {heatmapQuery.data && (
+        <div className="border border-isaac-border bg-isaac-surface p-4 space-y-2">
+          <div className="text-isaac-muted text-xs uppercase tracking-widest">Activity · past year · score runs</div>
+          <Heatmap dates={heatmapQuery.data.dates} />
+        </div>
+      )}
 
       {/* Per-run-type breakdown */}
       <div className="overflow-x-auto">

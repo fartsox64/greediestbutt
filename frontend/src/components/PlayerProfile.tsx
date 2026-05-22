@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import type { GameVersion, PlayerHiddenRun, PlayerRun, SortType, User } from "../types";
+import { VERSION_LABELS } from "../types";
 import { FollowButton } from "./FollowButton";
 import { Heatmap } from "./Heatmap";
 import { fetchHeatmap, fetchRivals } from "../api/client";
@@ -58,8 +59,8 @@ export function PlayerProfile({
   const streaks = computeStreaks(entries);
 
   const heatmapQuery = useQuery({
-    queryKey: ["heatmap", steamId],
-    queryFn: () => fetchHeatmap(steamId),
+    queryKey: ["heatmap", steamId, version, sortType],
+    queryFn: () => fetchHeatmap(steamId, version, sortType),
   });
 
   const rivalsQuery = useQuery({
@@ -192,7 +193,9 @@ export function PlayerProfile({
       {/* Activity heatmap */}
       {heatmapQuery.data && (
         <div className="border border-isaac-border bg-isaac-surface p-4 space-y-2">
-          <div className="text-isaac-muted text-xs uppercase tracking-widest">Activity (past year, all modes)</div>
+          <div className="text-isaac-muted text-xs uppercase tracking-widest">
+            Activity · past year · {VERSION_LABELS[version]} {sortType}
+          </div>
           <Heatmap dates={heatmapQuery.data.dates} />
         </div>
       )}

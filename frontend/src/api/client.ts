@@ -396,8 +396,12 @@ export function triggerRefreshStats(): Promise<void> {
 // New features: heatmap, rivals, head-to-head, records
 // ---------------------------------------------------------------------------
 
-export function fetchHeatmap(steamId: string): Promise<HeatmapResponse> {
-  return apiFetch<HeatmapResponse>(`${BASE}/player/${steamId}/heatmap`);
+export function fetchHeatmap(steamId: string, version?: string, sortType?: string): Promise<HeatmapResponse> {
+  const params = new URLSearchParams();
+  if (version) params.set("version", version);
+  if (sortType) params.set("sort_type", sortType);
+  const qs = params.toString();
+  return apiFetch<HeatmapResponse>(`${BASE}/player/${steamId}/heatmap${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchRivals(steamId: string): Promise<RivalsResponse> {

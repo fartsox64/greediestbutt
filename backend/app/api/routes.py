@@ -561,14 +561,24 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/player/{steam_id}/heatmap", response_model=HeatmapResponse)
-async def get_player_heatmap(steam_id: int, db: AsyncSession = Depends(get_db)):
+async def get_player_heatmap(
+    steam_id: int,
+    version: str | None = None,
+    sort_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    conditions = [
+        LeaderboardEntry.steam_id == steam_id,
+        LeaderboardEntry.hidden == False,  # noqa: E712
+    ]
+    if version:
+        conditions.append(DailyRun.version == version)
+    if sort_type:
+        conditions.append(DailyRun.sort_type == sort_type)
     result = await db.execute(
         select(DailyRun.date, func.count().label("cnt"))
         .join(LeaderboardEntry, LeaderboardEntry.daily_run_id == DailyRun.id)
-        .where(
-            LeaderboardEntry.steam_id == steam_id,
-            LeaderboardEntry.hidden == False,  # noqa: E712
-        )
+        .where(*conditions)
         .group_by(DailyRun.date)
         .order_by(DailyRun.date)
     )
