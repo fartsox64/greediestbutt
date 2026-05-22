@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -6,8 +6,12 @@ import type { GameVersion, PlayerHiddenRun, PlayerRun, SortType, User } from "..
 import { VERSION_LABELS } from "../types";
 import { FollowButton } from "./FollowButton";
 import { Heatmap } from "./Heatmap";
+import { Pagination } from "./Pagination";
 import { fetchHeatmap, fetchRivals } from "../api/client";
 import { calcHitsTaken } from "../utils";
+
+const HISTORY_PAGE_SIZE = 25;
+const RIVALS_PAGE_SIZE = 5;
 
 interface Props {
   steamId: string;
@@ -67,6 +71,22 @@ export function PlayerProfile({
     queryKey: ["rivals", steamId],
     queryFn: () => fetchRivals(steamId),
   });
+
+  const [historyPage, setHistoryPage] = useState(1);
+  const [rivalsPage, setRivalsPage] = useState(1);
+
+  const historyTotalPages = Math.max(1, Math.ceil(entries.length / HISTORY_PAGE_SIZE));
+  const pagedEntries = useMemo(
+    () => entries.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE),
+    [entries, historyPage],
+  );
+
+  const allRivals = rivalsQuery.data?.rivals ?? [];
+  const rivalsTotalPages = Math.max(1, Math.ceil(allRivals.length / RIVALS_PAGE_SIZE));
+  const pagedRivals = useMemo(
+    () => allRivals.slice((rivalsPage - 1) * RIVALS_PAGE_SIZE, rivalsPage * RIVALS_PAGE_SIZE),
+    [allRivals, rivalsPage],
+  );
 
   return (
     <div className="space-y-6">
@@ -200,35 +220,14 @@ export function PlayerProfile({
         </div>
       )}
 
-      {/* Run history table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-isaac-border text-isaac-muted text-xs uppercase tracking-widest">
-              <th className="text-left py-3 w-36">Date</th>
-              <th className="text-right pr-4 py-3 w-20">Rank</th>
-              <th className="text-right pr-6 py-3 w-40">
-                {sortType === "score" ? "Score" : "Time"}
-              </th>
-              {currentUser?.role && <th className="w-8" />}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry, idx) => (
-              <RunRow key={entry.date} entry={entry} idx={idx} version={version} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} isBest={entry.rank === bestRank} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
       {/* Rivals */}
-      {rivalsQuery.data && rivalsQuery.data.rivals.length > 0 && (
+      {allRivals.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
             Rivals
           </h3>
           <div className="divide-y divide-isaac-border border border-isaac-border">
-            {rivalsQuery.data.rivals.map((rival) => {
+            {pagedRivals.map((rival) => {
               const label = rival.player_name ?? `[${rival.steam_id}]`;
               const total = rival.wins + rival.losses + rival.ties;
               const winPct = total > 0 ? Math.round(rival.wins / total * 100) : 0;
@@ -255,8 +254,33 @@ export function PlayerProfile({
               );
             })}
           </div>
+          <Pagination page={rivalsPage} totalPages={rivalsTotalPages} onPageChange={setRivalsPage} />
         </div>
       )}
+
+      {/* Run history table */}
+      <div className="space-y-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-isaac-border text-isaac-muted text-xs uppercase tracking-widest">
+                <th className="text-left py-3 w-36">Date</th>
+                <th className="text-right pr-4 py-3 w-20">Rank</th>
+                <th className="text-right pr-6 py-3 w-40">
+                  {sortType === "score" ? "Score" : "Time"}
+                </th>
+                {currentUser?.role && <th className="w-8" />}
+              </tr>
+            </thead>
+            <tbody>
+              {pagedEntries.map((entry, idx) => (
+                <RunRow key={entry.date} entry={entry} idx={idx} version={version} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} isBest={entry.rank === bestRank} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage} />
+      </div>
 
       {/* Hidden scores — mod/admin only */}
       {hiddenEntries && hiddenEntries.length > 0 && (
