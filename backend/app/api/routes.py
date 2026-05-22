@@ -32,6 +32,14 @@ from ..schemas import (
     SearchResponse,
     SearchResult,
     DailyCountsResponse,
+    H2HPlayerInfo,
+    H2HRun,
+    HeadToHeadResponse,
+    HeatmapResponse,
+    RecordEntry,
+    RecordsResponse,
+    RivalEntry,
+    RivalsResponse,
     StatsResponse,
 )
 from ..scraper.steam import (
@@ -60,18 +68,18 @@ PAGE_SIZE_DEFAULT = 20
 # ---------------------------------------------------------------------------
 
 _CACHE_TTL = 300  # seconds
-_cache: dict[str, tuple[datetime, Any]] = {}
+_cache: dict[str, tuple[datetime, Any, int]] = {}
 
 
 def _cache_get(key: str) -> Any | None:
     entry = _cache.get(key)
-    if entry and (datetime.now(timezone.utc) - entry[0]).total_seconds() < _CACHE_TTL:
+    if entry and (datetime.now(timezone.utc) - entry[0]).total_seconds() < entry[2]:
         return entry[1]
     return None
 
 
-def _cache_set(key: str, value: Any) -> None:
-    _cache[key] = (datetime.now(timezone.utc), value)
+def _cache_set(key: str, value: Any, ttl: int = _CACHE_TTL) -> None:
+    _cache[key] = (datetime.now(timezone.utc), value, ttl)
 
 
 def _cache_invalidate_prefix(prefix: str) -> None:
@@ -546,6 +554,205 @@ async def get_profile(steam_id: int, db: AsyncSession = Depends(get_db)):
     )
     _cache_set(cache_key, result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Heatmap
+# ---------------------------------------------------------------------------
+
+@router.get("/player/{steam_id}/heatmap", response_model=HeatmapResponse)
+async def get_player_heatmap(steam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(DailyRun.date, func.count().label("cnt"))
+        .join(LeaderboardEntry, LeaderboardEntry.daily_run_id == DailyRun.id)
+        .where(
+            LeaderboardEntry.steam_id == steam_id,
+            LeaderboardEntry.hidden == False,  # noqa: E712
+        )
+        .group_by(DailyRun.date)
+        .order_by(DailyRun.date)
+    )
+    rows = result.all()
+    return HeatmapResponse(dates={str(row.date): row.cnt for row in rows})
+
+
+# ---------------------------------------------------------------------------
+# Rivals
+# ---------------------------------------------------------------------------
+
+@router.get("/player/{steam_id}/rivals", response_model=RivalsResponse)
+async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import and_, case, literal_column, text
+
+    auto_banned_sq = (
+        select(LeaderboardEntry.steam_id)
+        .where(LeaderboardEntry.hidden == True)  # noqa: E712
+        .group_by(LeaderboardEntry.steam_id)
+        .having(func.count() >= AUTO_BAN_THRESHOLD)
+        .scalar_subquery()
+    )
+
+    PlayerRun = aliased(LeaderboardEntry)
+    OpponentRun = aliased(LeaderboardEntry)
+
+    result = await db.execute(
+        select(
+            OpponentRun.steam_id,
+            SteamPlayerCache.player_name,
+            SteamPlayerCache.avatar_url,
+            func.count().label("shared_days"),
+            func.sum(case((PlayerRun.rank < OpponentRun.rank, 1), else_=0)).label("wins"),
+            func.sum(case((PlayerRun.rank > OpponentRun.rank, 1), else_=0)).label("losses"),
+            func.sum(case((PlayerRun.rank == OpponentRun.rank, 1), else_=0)).label("ties"),
+        )
+        .join(PlayerRun, and_(
+            PlayerRun.daily_run_id == OpponentRun.daily_run_id,
+            PlayerRun.steam_id == steam_id,
+            PlayerRun.hidden == False,  # noqa: E712
+            PlayerRun.steam_id.notin_(auto_banned_sq),
+        ))
+        .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == OpponentRun.steam_id)
+        .where(
+            OpponentRun.steam_id != steam_id,
+            OpponentRun.hidden == False,  # noqa: E712
+            OpponentRun.steam_id.notin_(auto_banned_sq),
+        )
+        .group_by(OpponentRun.steam_id, SteamPlayerCache.player_name, SteamPlayerCache.avatar_url)
+        .order_by(func.count().desc())
+        .limit(10)
+    )
+    rows = result.all()
+    return RivalsResponse(rivals=[
+        RivalEntry(
+            steam_id=row.steam_id,
+            player_name=row.player_name,
+            avatar_url=row.avatar_url,
+            shared_days=row.shared_days,
+            wins=row.wins,
+            losses=row.losses,
+            ties=row.ties,
+        )
+        for row in rows
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Head-to-head
+# ---------------------------------------------------------------------------
+
+@router.get("/head-to-head", response_model=HeadToHeadResponse)
+async def get_head_to_head(
+    p1: int = Query(...),
+    p2: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    P1 = aliased(LeaderboardEntry)
+    P2 = aliased(LeaderboardEntry)
+    P1Cache = aliased(SteamPlayerCache)
+    P2Cache = aliased(SteamPlayerCache)
+
+    runs_result = await db.execute(
+        select(DailyRun.date, DailyRun.version, DailyRun.sort_type, P1.rank, P2.rank)
+        .join(P1, and_(P1.daily_run_id == DailyRun.id, P1.steam_id == p1, P1.hidden == False))  # noqa: E712
+        .join(P2, and_(P2.daily_run_id == DailyRun.id, P2.steam_id == p2, P2.hidden == False))  # noqa: E712
+        .order_by(DailyRun.date.desc())
+    )
+    runs = runs_result.all()
+
+    p1_wins = sum(1 for r in runs if r[3] < r[4])
+    p2_wins = sum(1 for r in runs if r[3] > r[4])
+    ties = sum(1 for r in runs if r[3] == r[4])
+
+    p1_cache = await db.execute(
+        select(P1Cache.player_name, P1Cache.avatar_url).where(P1Cache.steam_id == p1)
+    )
+    p2_cache = await db.execute(
+        select(P2Cache.player_name, P2Cache.avatar_url).where(P2Cache.steam_id == p2)
+    )
+    p1_row = p1_cache.first()
+    p2_row = p2_cache.first()
+
+    return HeadToHeadResponse(
+        p1=H2HPlayerInfo(steam_id=p1, player_name=p1_row.player_name if p1_row else None, avatar_url=p1_row.avatar_url if p1_row else None),
+        p2=H2HPlayerInfo(steam_id=p2, player_name=p2_row.player_name if p2_row else None, avatar_url=p2_row.avatar_url if p2_row else None),
+        shared_days=len(runs),
+        p1_wins=p1_wins,
+        p2_wins=p2_wins,
+        ties=ties,
+        recent=[
+            H2HRun(date=str(r[0]), version=r[1], sort_type=r[2], p1_rank=r[3], p2_rank=r[4])
+            for r in runs[:20]
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# All-time records
+# ---------------------------------------------------------------------------
+
+@router.get("/records", response_model=RecordsResponse)
+async def get_records(db: AsyncSession = Depends(get_db)):
+    cache_key = "records"
+    if (cached := _cache_get(cache_key)) is not None:
+        return cached
+
+    auto_banned_sq = (
+        select(LeaderboardEntry.steam_id)
+        .where(LeaderboardEntry.hidden == True)  # noqa: E712
+        .group_by(LeaderboardEntry.steam_id)
+        .having(func.count() >= AUTO_BAN_THRESHOLD)
+        .scalar_subquery()
+    )
+
+    records = []
+    for version in GameVersion:
+        for sort_type in SortType:
+            if sort_type == SortType.SCORE:
+                order_col = LeaderboardEntry.value.desc()
+                value_filter = LeaderboardEntry.value.isnot(None)
+            else:
+                order_col = LeaderboardEntry.time_taken.asc()
+                value_filter = LeaderboardEntry.time_taken.isnot(None)
+
+            result = await db.execute(
+                select(
+                    LeaderboardEntry.id,
+                    LeaderboardEntry.steam_id,
+                    LeaderboardEntry.value,
+                    LeaderboardEntry.time_taken,
+                    LeaderboardEntry.rank,
+                    DailyRun.date,
+                    SteamPlayerCache.player_name,
+                )
+                .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+                .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
+                .where(
+                    DailyRun.version == version,
+                    DailyRun.sort_type == sort_type,
+                    LeaderboardEntry.hidden == False,  # noqa: E712
+                    LeaderboardEntry.steam_id.notin_(auto_banned_sq),
+                    value_filter,
+                )
+                .order_by(order_col)
+                .limit(1)
+            )
+            row = result.first()
+            if row:
+                records.append(RecordEntry(
+                    version=version,
+                    sort_type=sort_type,
+                    entry_id=row.id,
+                    steam_id=row.steam_id,
+                    player_name=row.player_name,
+                    value=row.value,
+                    time_taken=row.time_taken,
+                    date=str(row.date),
+                    rank=row.rank,
+                ))
+
+    response = RecordsResponse(records=records)
+    _cache_set(cache_key, response, ttl=3600)
+    return response
 
 
 # ---------------------------------------------------------------------------

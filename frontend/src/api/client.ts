@@ -20,6 +20,10 @@ import type {
   PlayerResponse,
   ProfileResponse,
   ReportsResponse,
+  RecordsResponse,
+  RivalsResponse,
+  HeadToHeadResponse,
+  HeatmapResponse,
   SchedulerStatusResponse,
   SearchResponse,
   SortType,
@@ -386,4 +390,24 @@ export function triggerBackfillNames(): Promise<void> {
 
 export function triggerRefreshStats(): Promise<void> {
   return apiFetch<void>(`${BASE}/scrape/refresh-stats`, undefined, { method: "POST" });
+}
+
+// ---------------------------------------------------------------------------
+// New features: heatmap, rivals, head-to-head, records
+// ---------------------------------------------------------------------------
+
+export function fetchHeatmap(steamId: string): Promise<HeatmapResponse> {
+  return apiFetch<HeatmapResponse>(`${BASE}/player/${steamId}/heatmap`);
+}
+
+export function fetchRivals(steamId: string): Promise<RivalsResponse> {
+  return apiFetch<RivalsResponse>(`${BASE}/player/${steamId}/rivals`);
+}
+
+export function fetchHeadToHead(p1: string, p2: string): Promise<HeadToHeadResponse> {
+  return apiFetch<HeadToHeadResponse>(`${BASE}/head-to-head?p1=${p1}&p2=${p2}`);
+}
+
+export function fetchRecords(): Promise<RecordsResponse> {
+  return apiFetch<RecordsResponse>(`${BASE}/records`);
 }

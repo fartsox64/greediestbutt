@@ -308,6 +308,64 @@ export interface SchedulerStatusResponse {
   jobs: SchedulerJob[];
 }
 
+export interface HeatmapResponse {
+  dates: Record<string, number>;
+}
+
+export interface RivalEntry {
+  steam_id: string;
+  player_name: string | null;
+  avatar_url: string | null;
+  shared_days: number;
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+export interface RivalsResponse {
+  rivals: RivalEntry[];
+}
+
+export interface H2HPlayerInfo {
+  steam_id: string;
+  player_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface H2HRun {
+  date: string;
+  version: GameVersion;
+  sort_type: SortType;
+  p1_rank: number;
+  p2_rank: number;
+}
+
+export interface HeadToHeadResponse {
+  p1: H2HPlayerInfo;
+  p2: H2HPlayerInfo;
+  shared_days: number;
+  p1_wins: number;
+  p2_wins: number;
+  ties: number;
+  recent: H2HRun[];
+}
+
+export interface RecordEntry {
+  version: GameVersion;
+  sort_type: SortType;
+  entry_id: number;
+  steam_id: string;
+  player_name: string | null;
+  value: number | null;
+  time_taken: number | null;
+  date: string;
+  rank: number;
+}
+
+export interface RecordsResponse {
+  records: RecordEntry[];
+}
+
 export const VERSION_ORDER: GameVersion[] = [
   "repentance_plus_solo",
   "repentance_plus_coop",

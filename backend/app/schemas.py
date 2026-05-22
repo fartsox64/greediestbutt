@@ -405,3 +405,89 @@ class FeedbackListResponse(BaseModel):
 
 class AboutContent(BaseModel):
     content: str
+
+
+# ---------------------------------------------------------------------------
+# Heatmap
+# ---------------------------------------------------------------------------
+
+class HeatmapResponse(BaseModel):
+    dates: dict[str, int]  # ISO date -> run count that day
+
+
+# ---------------------------------------------------------------------------
+# Rivals
+# ---------------------------------------------------------------------------
+
+class RivalEntry(BaseModel):
+    steam_id: int
+    player_name: str | None
+    avatar_url: str | None
+    shared_days: int
+    wins: int
+    losses: int
+    ties: int
+
+    @field_serializer("steam_id")
+    def _sid_str(self, v: int) -> str:
+        return str(v)
+
+
+class RivalsResponse(BaseModel):
+    rivals: list[RivalEntry]
+
+
+# ---------------------------------------------------------------------------
+# Head-to-head
+# ---------------------------------------------------------------------------
+
+class H2HPlayerInfo(BaseModel):
+    steam_id: int
+    player_name: str | None
+    avatar_url: str | None
+
+    @field_serializer("steam_id")
+    def _sid_str(self, v: int) -> str:
+        return str(v)
+
+
+class H2HRun(BaseModel):
+    date: str
+    version: GameVersion
+    sort_type: SortType
+    p1_rank: int
+    p2_rank: int
+
+
+class HeadToHeadResponse(BaseModel):
+    p1: H2HPlayerInfo
+    p2: H2HPlayerInfo
+    shared_days: int
+    p1_wins: int
+    p2_wins: int
+    ties: int
+    recent: list[H2HRun]
+
+
+# ---------------------------------------------------------------------------
+# All-time records
+# ---------------------------------------------------------------------------
+
+class RecordEntry(BaseModel):
+    version: GameVersion
+    sort_type: SortType
+    entry_id: int
+    steam_id: int
+    player_name: str | None
+    value: int | None
+    time_taken: int | None
+    date: str
+    rank: int
+
+    @field_serializer("steam_id")
+    def _sid_str(self, v: int) -> str:
+        return str(v)
+
+
+class RecordsResponse(BaseModel):
+    records: list[RecordEntry]

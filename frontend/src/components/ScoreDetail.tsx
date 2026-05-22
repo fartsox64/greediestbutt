@@ -113,6 +113,11 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
                 <span className="text-isaac-muted"> of {entry.total_entries.toLocaleString()}</span>
               )}
             </div>
+            {entry.total_entries != null && entry.total_entries > 0 && (
+              <div className="text-xs text-isaac-muted mt-0.5">
+                top {Math.ceil(entry.rank / entry.total_entries * 100)}%
+              </div>
+            )}
           </div>
         </div>
 

@@ -413,7 +413,7 @@ During every scrape, entries with field values that are physically impossible on
 | Field | Maximum allowed |
 |-------|----------------|
 | `time_penalty` | 2,147,483,647 |
-| `schwag_bonus` | 19,150 |
+| `schwag_bonus` | 16,329 |
 
 Automod-hidden entries count toward the auto-ban threshold the same as manually hidden ones.
 
@@ -429,7 +429,7 @@ FROM   daily_runs dr
 WHERE  le.daily_run_id = dr.id
   AND  dr.version IN ('repentance', 'repentance_plus_solo', 'repentance_plus_coop', 'afterbirth_plus', 'afterbirth')
   AND  le.hidden = false
-  AND  (le.time_penalty > 2147483647 OR le.schwag_bonus > 19150);
+  AND  (le.time_penalty > 2147483647 OR le.schwag_bonus > 16329);
 "
 ```
 
@@ -504,7 +504,11 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/entry/{id}` | Full detail for a single leaderboard entry (rank, score/time, bonuses, penalties, date, version) |
 | `GET` | `/api/leaderboard` | Paginated daily leaderboard |
 | `GET` | `/api/overall-leaderboard` | All-time aggregate rankings |
+| `GET` | `/api/records` | All-time best score and fastest time per version/sort combination |
 | `GET` | `/api/player/{steam_id}` | All runs for a specific player |
+| `GET` | `/api/player/{steam_id}/heatmap` | All dates the player participated (across all versions), for the activity calendar |
+| `GET` | `/api/player/{steam_id}/rivals` | Top 10 opponents by most shared days, with win/loss/tie record |
+| `GET` | `/api/head-to-head?p1={id}&p2={id}` | Head-to-head comparison between two players |
 | `GET` | `/api/profile/{steam_id}` | Player profile with aggregate stats |
 | `GET` | `/api/search` | Search players by name or Steam ID |
 | `GET` | `/api/available-dates` | Dates with data for a version/sort |

@@ -45,10 +45,12 @@ import { FeedbackModal } from "./components/FeedbackModal";
 import { AboutPage } from "./components/AboutPage";
 import { DailyCountsPage } from "./components/DailyCountsPage";
 import { ScoreDetail } from "./components/ScoreDetail";
+import { Records } from "./components/Records";
+import { HeadToHead } from "./components/HeadToHead";
 import type { GameVersion, SortType } from "./types";
 import { safeHttpsUrl } from "./utils";
 
-type View = "daily" | "overall" | "profile" | "mod" | "admin" | "about" | "stats" | "entry";
+type View = "daily" | "overall" | "profile" | "mod" | "admin" | "about" | "stats" | "entry" | "records" | "compare";
 
 interface SelectedPlayer {
   steamId: string;
@@ -63,6 +65,7 @@ interface UrlState {
   selectedPlayer: SelectedPlayer | null;
   profileSteamId: string | null;
   entryId: number | null;
+  compareIds: [string, string] | null;
 }
 
 function readUrl(): UrlState {
@@ -73,9 +76,11 @@ function readUrl(): UrlState {
   const isAbout = segs[0] === "about";
   const isStats = segs[0] === "stats";
   const isEntry = segs[0] === "entry";
-  const view: View = isAdmin ? "admin" : isMod ? "mod" : isAbout ? "about" : isStats ? "stats" : isProfile ? "profile" : isEntry ? "entry" : segs[0] === "overall" ? "overall" : "daily";
-  const version = (!isProfile && !isEntry ? segs[1] as GameVersion : null) ?? "repentance_plus_solo";
-  const sortType = (!isProfile && !isEntry ? segs[2] as SortType : null) ?? "score";
+  const isRecords = segs[0] === "records";
+  const isCompare = segs[0] === "compare";
+  const view: View = isAdmin ? "admin" : isMod ? "mod" : isAbout ? "about" : isStats ? "stats" : isProfile ? "profile" : isEntry ? "entry" : isRecords ? "records" : isCompare ? "compare" : segs[0] === "overall" ? "overall" : "daily";
+  const version = (!isProfile && !isEntry && !isRecords && !isCompare ? segs[1] as GameVersion : null) ?? "repentance_plus_solo";
+  const sortType = (!isProfile && !isEntry && !isRecords && !isCompare ? segs[2] as SortType : null) ?? "score";
   const selectedDate = view === "daily" ? (segs[3] ?? null) : null;
   const selectedPlayer =
     view === "overall" && segs[3] === "player" && segs[4]
@@ -83,7 +88,8 @@ function readUrl(): UrlState {
       : null;
   const profileSteamId = isProfile && segs[1] ? segs[1] : null;
   const entryId = isEntry && segs[1] ? parseInt(segs[1], 10) : null;
-  return { view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId };
+  const compareIds = isCompare && segs[1] && segs[2] ? [segs[1], segs[2]] as [string, string] : null;
+  return { view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId, compareIds };
 }
 
 function writeUrl(s: UrlState, replace: boolean): void {
@@ -96,6 +102,10 @@ function writeUrl(s: UrlState, replace: boolean): void {
     url = "/about";
   } else if (s.view === "stats") {
     url = "/stats";
+  } else if (s.view === "records") {
+    url = "/records";
+  } else if (s.view === "compare" && s.compareIds) {
+    url = `/compare/${s.compareIds[0]}/${s.compareIds[1]}`;
   } else if (s.view === "entry" && s.entryId != null) {
     url = `/entry/${s.entryId}`;
   } else if (s.view === "profile" && s.profileSteamId) {
@@ -123,6 +133,7 @@ export default function App() {
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayer | null>(() => readUrl().selectedPlayer);
   const [profileSteamId, setProfileSteamId] = useState<string | null>(() => readUrl().profileSteamId);
   const [entryId, setEntryId] = useState<number | null>(() => readUrl().entryId);
+  const [compareIds, setCompareIds] = useState<[string, string] | null>(() => readUrl().compareIds);
 
   // Track whether a token is stored (drives auth queries without re-reading localStorage every render)
   const [hasToken, setHasToken] = useState(() => !!getToken());
@@ -152,13 +163,14 @@ export default function App() {
       setSelectedPlayer(s.selectedPlayer);
       setProfileSteamId(s.profileSteamId);
       setEntryId(s.entryId);
+      setCompareIds(s.compareIds);
       setPage(1);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
-  const snap = (): UrlState => ({ view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId });
+  const snap = (): UrlState => ({ view, version, sortType, selectedDate, selectedPlayer, profileSteamId, entryId, compareIds });
 
   const handleVersionChange = (v: GameVersion) => {
     writeUrl({ ...snap(), version: v, selectedDate: null, selectedPlayer: null }, false);
@@ -180,7 +192,7 @@ export default function App() {
     setView(v); setSelectedPlayer(null); setProfileSteamId(null); setPage(1);
   };
   const handleHomeClick = () => {
-    writeUrl({ view: "daily", version, sortType, selectedDate: null, selectedPlayer: null, profileSteamId: null, entryId: null }, false);
+    writeUrl({ view: "daily", version, sortType, selectedDate: null, selectedPlayer: null, profileSteamId: null, entryId: null, compareIds: null }, false);
     setView("daily"); setSelectedPlayer(null); setProfileSteamId(null); setSelectedDate(null); setEntryId(null); setPage(1);
   };
   const handleProfileClick = (steamId: string) => {
@@ -203,6 +215,15 @@ export default function App() {
   };
   const handlePageChange = (p: number) => {
     setPage(p);
+  };
+  const handleRecordsClick = () => {
+    writeUrl({ ...snap(), view: "records", compareIds: null }, false);
+    setView("records");
+  };
+  const handleHeadToHead = (p1: string, p2: string) => {
+    const ids: [string, string] = [p1, p2];
+    writeUrl({ ...snap(), view: "compare", compareIds: ids }, false);
+    setView("compare"); setCompareIds(ids);
   };
 
   // ---------------------------------------------------------------------------
@@ -493,6 +514,16 @@ export default function App() {
               >
                 Overall
               </button>
+              <button
+                onClick={handleRecordsClick}
+                className={`px-4 py-2 transition-colors border-l border-isaac-border ${
+                  view === "records"
+                    ? "bg-isaac-accent text-isaac-bg font-bold"
+                    : "bg-isaac-surface text-isaac-muted hover:text-isaac-text"
+                }`}
+              >
+                Records
+              </button>
             </div>
 
             {/* Mod panel link */}
@@ -622,6 +653,12 @@ export default function App() {
               onBack={() => window.history.back()}
             />
           ) : null
+        ) : view === "records" ? (
+          <Records onPlayerClick={handleProfileClick} onEntryClick={handleScoreClick} />
+        ) : view === "compare" ? (
+          compareIds
+            ? <HeadToHead p1Id={compareIds[0]} p2Id={compareIds[1]} onPlayerClick={handleProfileClick} onBack={() => window.history.back()} />
+            : null
         ) : view === "stats" ? (
           <DailyCountsPage />
         ) : view === "about" ? (
@@ -716,6 +753,8 @@ export default function App() {
                 onHide={handleHide}
                 onScoreClick={handleScoreClick}
                 onDateClick={handleDateClick}
+                onPlayerClick={handleProfileClick}
+                onHeadToHead={handleHeadToHead}
               />
             ) : null}
           </>

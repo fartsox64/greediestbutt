@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 import type { GameVersion, PlayerHiddenRun, PlayerRun, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
+import { Heatmap } from "./Heatmap";
+import { fetchHeatmap, fetchRivals } from "../api/client";
 import { calcHitsTaken } from "../utils";
 
 interface Props {
@@ -21,6 +24,8 @@ interface Props {
   onHide: (entryId: number) => void;
   onScoreClick: (entryId: number) => void;
   onDateClick: (date: string, rank: number) => void;
+  onPlayerClick: (steamId: string) => void;
+  onHeadToHead: (p1: string, p2: string) => void;
 }
 
 export function PlayerProfile({
@@ -39,6 +44,8 @@ export function PlayerProfile({
   onHide,
   onScoreClick,
   onDateClick,
+  onPlayerClick,
+  onHeadToHead,
 }: Props) {
   const playerLabel = playerName ?? `[${steamId}]`;
   const mediumAvatarUrl = avatarUrl ? avatarUrl.replace(".jpg", "_medium.jpg") : undefined;
@@ -49,6 +56,16 @@ export function PlayerProfile({
   const avgRank = entries.reduce((s, e) => s + e.rank, 0) / entries.length;
   const bestRank = Math.min(...entries.map((e) => e.rank));
   const streaks = computeStreaks(entries);
+
+  const heatmapQuery = useQuery({
+    queryKey: ["heatmap", steamId],
+    queryFn: () => fetchHeatmap(steamId),
+  });
+
+  const rivalsQuery = useQuery({
+    queryKey: ["rivals", steamId],
+    queryFn: () => fetchRivals(steamId),
+  });
 
   return (
     <div className="space-y-6">
@@ -172,6 +189,14 @@ export function PlayerProfile({
         </div>
       </div>
 
+      {/* Activity heatmap */}
+      {heatmapQuery.data && (
+        <div className="border border-isaac-border bg-isaac-surface p-4 space-y-2">
+          <div className="text-isaac-muted text-xs uppercase tracking-widest">Activity (past year, all modes)</div>
+          <Heatmap dates={heatmapQuery.data.dates} />
+        </div>
+      )}
+
       {/* Run history table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
@@ -187,11 +212,48 @@ export function PlayerProfile({
           </thead>
           <tbody>
             {entries.map((entry, idx) => (
-              <RunRow key={entry.date} entry={entry} idx={idx} version={version} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} />
+              <RunRow key={entry.date} entry={entry} idx={idx} version={version} sortType={sortType} canHide={!!currentUser?.role} onHide={onHide} onScoreClick={onScoreClick} onDateClick={onDateClick} isBest={entry.rank === bestRank} />
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Rivals */}
+      {rivalsQuery.data && rivalsQuery.data.rivals.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
+            Rivals
+          </h3>
+          <div className="divide-y divide-isaac-border border border-isaac-border">
+            {rivalsQuery.data.rivals.map((rival) => {
+              const label = rival.player_name ?? `[${rival.steam_id}]`;
+              const total = rival.wins + rival.losses + rival.ties;
+              const winPct = total > 0 ? Math.round(rival.wins / total * 100) : 0;
+              return (
+                <div key={rival.steam_id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <button
+                    onClick={() => onPlayerClick(rival.steam_id)}
+                    className="flex-1 text-left text-isaac-text hover:text-isaac-accent transition-colors truncate min-w-0"
+                  >
+                    {label}
+                  </button>
+                  <span className="text-isaac-muted text-xs font-mono tabular-nums shrink-0">
+                    {rival.shared_days}d · {rival.wins}W–{rival.losses}L{rival.ties > 0 ? `–${rival.ties}T` : ""} <span className={winPct >= 50 ? "text-green-400" : "text-red-400"}>({winPct}%)</span>
+                  </span>
+                  {currentUser && (
+                    <button
+                      onClick={() => onHeadToHead(steamId, rival.steam_id)}
+                      className="text-[10px] border border-isaac-border px-2 py-0.5 text-isaac-muted hover:text-isaac-accent hover:border-isaac-accent transition-colors shrink-0"
+                    >
+                      H2H
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Hidden scores — mod/admin only */}
       {hiddenEntries && hiddenEntries.length > 0 && (
@@ -224,7 +286,7 @@ export function PlayerProfile({
   );
 }
 
-function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, onDateClick }: { entry: PlayerRun; idx: number; version: GameVersion; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void; onDateClick: (date: string, rank: number) => void }) {
+function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, onDateClick, isBest }: { entry: PlayerRun; idx: number; version: GameVersion; sortType: SortType; canHide: boolean; onHide: (id: number) => void; onScoreClick: (id: number) => void; onDateClick: (date: string, rank: number) => void; isBest: boolean }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -280,7 +342,10 @@ function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, 
           </button>
         </td>
         <td className={`text-right pr-4 py-2.5 tabular-nums ${rankClass}`}>
-          {entry.rank}
+          <span className="inline-flex items-center gap-1.5">
+            {isBest && <span className="text-[9px] font-bold tracking-widest text-isaac-accent border border-isaac-accent/50 px-1 py-px">PB</span>}
+            {entry.rank}
+          </span>
         </td>
         <td className="text-right pr-6 py-2.5 tabular-nums font-mono">
           <button
