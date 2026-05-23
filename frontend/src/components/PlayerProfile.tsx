@@ -68,8 +68,8 @@ export function PlayerProfile({
   });
 
   const rivalsQuery = useQuery({
-    queryKey: ["rivals", steamId],
-    queryFn: () => fetchRivals(steamId),
+    queryKey: ["rivals", steamId, version, sortType],
+    queryFn: () => fetchRivals(steamId, version, sortType),
   });
 
   const [historyPage, setHistoryPage] = useState(1);
@@ -224,7 +224,7 @@ export function PlayerProfile({
       {allRivals.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
-            Rivals
+            Rivals · {VERSION_LABELS[version]} {sortType}
           </h3>
           <div className="divide-y divide-isaac-border border border-isaac-border">
             {pagedRivals.map((rival) => {

@@ -591,7 +591,12 @@ async def get_player_heatmap(
 # ---------------------------------------------------------------------------
 
 @router.get("/player/{steam_id}/rivals", response_model=RivalsResponse)
-async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
+async def get_player_rivals(
+    steam_id: int,
+    version: GameVersion = Query(...),
+    sort_type: SortType = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
     # Fast pre-check: if the target player is auto-banned, their runs are excluded
     # everywhere, so rivals would be empty. Avoids embedding a subquery in the join.
     hidden_count = await db.scalar(
@@ -601,14 +606,21 @@ async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
     if hidden_count >= AUTO_BAN_THRESHOLD:
         return RivalsResponse(rivals=[])
 
-    # CTE: the target player's visible runs (small set, fast index scan on steam_id+hidden)
+    # CTE: the target player's visible runs for the selected mode
     PlayerEntry = aliased(LeaderboardEntry)
+    PlayerDailyRun = aliased(DailyRun)
     player_runs_cte = (
         select(
             PlayerEntry.daily_run_id,
             PlayerEntry.rank.label("player_rank"),
         )
-        .where(PlayerEntry.steam_id == steam_id, PlayerEntry.hidden == False)  # noqa: E712
+        .join(PlayerDailyRun, PlayerDailyRun.id == PlayerEntry.daily_run_id)
+        .where(
+            PlayerEntry.steam_id == steam_id,
+            PlayerEntry.hidden == False,  # noqa: E712
+            PlayerDailyRun.version == version,
+            PlayerDailyRun.sort_type == sort_type,
+        )
         .cte("player_runs")
     )
 

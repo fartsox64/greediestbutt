@@ -404,8 +404,9 @@ export function fetchHeatmap(steamId: string, version?: string, sortType?: strin
   return apiFetch<HeatmapResponse>(`${BASE}/player/${steamId}/heatmap${qs ? `?${qs}` : ""}`);
 }
 
-export function fetchRivals(steamId: string): Promise<RivalsResponse> {
-  return apiFetch<RivalsResponse>(`${BASE}/player/${steamId}/rivals`);
+export function fetchRivals(steamId: string, version: string, sortType: string): Promise<RivalsResponse> {
+  const params = new URLSearchParams({ version, sort_type: sortType });
+  return apiFetch<RivalsResponse>(`${BASE}/player/${steamId}/rivals?${params}`);
 }
 
 export function fetchHeadToHead(p1: string, p2: string): Promise<HeadToHeadResponse> {

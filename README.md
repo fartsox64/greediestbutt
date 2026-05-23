@@ -507,7 +507,7 @@ Isaac stores daily run completion times as a **frame count at 30 fps**. The fron
 | `GET` | `/api/records` | All-time best score and fastest time per version/sort combination |
 | `GET` | `/api/player/{steam_id}` | All runs for a specific player |
 | `GET` | `/api/player/{steam_id}/heatmap` | Participation dates for the activity calendar; optional `version` and `sort_type` query params narrow to a specific mode |
-| `GET` | `/api/player/{steam_id}/rivals` | Top 10 opponents by most shared days, with win/loss/tie record |
+| `GET` | `/api/player/{steam_id}/rivals` | Top 10 opponents by most shared days, with win/loss/tie record; requires `version` and `sort_type` query params |
 | `GET` | `/api/head-to-head?p1={id}&p2={id}` | Head-to-head comparison between two players |
 | `GET` | `/api/profile/{steam_id}` | Player profile with aggregate stats |
 | `GET` | `/api/search` | Search players by name or Steam ID |
