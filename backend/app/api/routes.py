@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -592,8 +592,6 @@ async def get_player_heatmap(
 
 @router.get("/player/{steam_id}/rivals", response_model=RivalsResponse)
 async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
-    from sqlalchemy import and_, case, literal_column, text
-
     auto_banned_sq = (
         select(LeaderboardEntry.steam_id)
         .where(LeaderboardEntry.hidden == True)  # noqa: E712
