@@ -117,6 +117,8 @@ class LeaderboardEntry(Base):
         Index("ix_leaderboard_entries_daily_run_rank", "daily_run_id", "rank"),
         Index("ix_le_steam_id", "steam_id"),
         Index("ix_le_hidden_steam_id", "hidden", "steam_id"),
+        Index("ix_le_steam_hidden_run", "steam_id", "hidden", "daily_run_id"),
+        Index("ix_le_run_hidden_steam_rank", "daily_run_id", "hidden", "steam_id", "rank"),
     )
 
 
