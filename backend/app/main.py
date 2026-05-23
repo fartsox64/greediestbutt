@@ -13,7 +13,7 @@ from .api.auth_routes import router as auth_router
 from .api.feedback_routes import router as feedback_router
 from .api.mod_routes import router as mod_router
 from .api.report_routes import router as report_router
-from .api.routes import router, refresh_stats_summary_cache
+from .api.routes import router, refresh_records_cache, refresh_stats_summary_cache
 from .config import settings
 from .database import AsyncSessionLocal
 from .scraper.steam import backfill_player_names, refresh_overall_stats, scrape_recent
@@ -58,6 +58,7 @@ async def _scrape_job() -> None:
         async with AsyncSessionLocal() as db:
             stats = await scrape_recent(db)
             await refresh_stats_summary_cache(db)
+            await refresh_records_cache(db)
         log.info(
             "Scheduled scrape complete — created=%d updated=%d entries=%d",
             stats["runs_created"],
@@ -131,6 +132,15 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
     app.state.job_state = _job_state
     log.info("Scheduler started — scraping every 10 minutes, name backfill every 15 minutes, full stats refresh daily at 02:00")
+
+    log.info("Pre-warming records cache...")
+    try:
+        async with AsyncSessionLocal() as db:
+            await refresh_records_cache(db)
+        log.info("Records cache warmed")
+    except Exception:
+        log.exception("Records cache pre-warm failed — first request will be slow")
+
     yield
     scheduler.shutdown(wait=False)
     log.info("Scheduler stopped")

@@ -728,13 +728,7 @@ async def get_head_to_head(
 # All-time records
 # ---------------------------------------------------------------------------
 
-@router.get("/records", response_model=RecordsResponse)
-async def get_records(db: AsyncSession = Depends(get_db)):
-    cache_key = "records"
-    if (cached := _cache_get(cache_key)) is not None:
-        return cached
-
-    # Build banned CTE once, reused by both queries.
+async def refresh_records_cache(db: AsyncSession) -> None:
     BannedEntry = aliased(LeaderboardEntry)
     banned_cte = (
         select(BannedEntry.steam_id)
@@ -745,12 +739,9 @@ async def get_records(db: AsyncSession = Depends(get_db)):
     )
 
     records = []
-
-    # One query per sort direction: DISTINCT ON (version) picks the best row per
-    # version in a single scan instead of running a separate query per version.
     for sort_type, order_col, value_filter in [
-        (SortType.SCORE, LeaderboardEntry.value.desc(),      LeaderboardEntry.value.isnot(None)),
-        (SortType.TIME,  LeaderboardEntry.time_taken.asc(),  LeaderboardEntry.time_taken.isnot(None)),
+        (SortType.SCORE, LeaderboardEntry.value.desc(),     LeaderboardEntry.value.isnot(None)),
+        (SortType.TIME,  LeaderboardEntry.time_taken.asc(), LeaderboardEntry.time_taken.isnot(None)),
     ]:
         result = await db.execute(
             select(
@@ -788,9 +779,15 @@ async def get_records(db: AsyncSession = Depends(get_db)):
                 rank=row.rank,
             ))
 
-    response = RecordsResponse(records=records)
-    _cache_set(cache_key, response, ttl=3600)
-    return response
+    _cache_set("records", RecordsResponse(records=records), ttl=3600)
+
+
+@router.get("/records", response_model=RecordsResponse)
+async def get_records(db: AsyncSession = Depends(get_db)):
+    if (cached := _cache_get("records")) is not None:
+        return cached
+    await refresh_records_cache(db)
+    return _cache_get("records")
 
 
 # ---------------------------------------------------------------------------
