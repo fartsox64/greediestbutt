@@ -221,7 +221,23 @@ export function PlayerProfile({
       )}
 
       {/* Rivals */}
-      {allRivals.length > 0 && (
+      {rivalsQuery.isLoading && (
+        <div className="space-y-2">
+          <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
+            Rivals · {VERSION_LABELS[version]} {sortType}
+          </h3>
+          <div className="divide-y divide-isaac-border border border-isaac-border">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="flex-1 h-3 bg-isaac-border rounded animate-pulse" />
+                <div className="h-3 w-36 bg-isaac-border rounded animate-pulse shrink-0" />
+                <div className="h-5 w-9 bg-isaac-border rounded animate-pulse shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!rivalsQuery.isLoading && allRivals.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs uppercase tracking-widest text-isaac-muted border-b border-isaac-border pb-2">
             Rivals · {VERSION_LABELS[version]} {sortType}
