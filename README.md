@@ -461,7 +461,7 @@ If a player accumulates **5 or more hidden scores**, all of their scores are aut
 
 ### Banning a player manually
 
-Moderators and admins can ban a player directly from the player's profile page using the **Ban User** button. Banning hides all of the player's visible scores and records a `banned_at` timestamp on the user. The button is shown for any non-admin, non-banned player.
+Moderators and admins can ban a player directly from the player's profile page using the **Ban User** button. Banning hides all of the player's visible scores and records a `banned_at` timestamp on the user. Any entries scraped for that player in subsequent scrapes are also hidden immediately. The button is shown for any non-admin, non-banned player.
 
 After deploying migration 021, backfill `banned_at` for players already auto-banned in production:
 

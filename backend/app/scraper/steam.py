@@ -30,7 +30,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..models import DailyRun, GameVersion, LeaderboardEntry, PlayerOverallStats, SiteSetting, SortType, SteamPlayerCache
+from ..models import DailyRun, GameVersion, LeaderboardEntry, PlayerOverallStats, SiteSetting, SortType, SteamPlayerCache, User
 
 _BoardSignature = tuple[GameVersion, SortType]
 
@@ -611,6 +611,27 @@ async def automod_entries(db: AsyncSession, run: DailyRun) -> list[int]:
     return steam_ids
 
 
+async def hide_banned_player_entries(db: AsyncSession, run: DailyRun) -> None:
+    """Hide any freshly scraped entries belonging to manually banned players.
+
+    The scraper inserts new entries with hidden=false by default.  Players with
+    users.banned_at set should never have visible entries, so this corrects that
+    immediately after each upsert rather than waiting for a mod to notice.
+    """
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        update(LeaderboardEntry)
+        .where(
+            LeaderboardEntry.daily_run_id == run.id,
+            LeaderboardEntry.hidden == False,  # noqa: E712
+            LeaderboardEntry.steam_id.in_(
+                select(User.steam_id).where(User.banned_at.isnot(None))
+            ),
+        )
+        .values(hidden=True, hidden_at=now, hidden_source="automod")
+    )
+
+
 # ---------------------------------------------------------------------------
 # High-level scrape operations
 # ---------------------------------------------------------------------------
@@ -757,6 +778,7 @@ async def scrape_date_range(
 
             count = await upsert_entries(db, run, raw_entries)
             await automod_entries(db, run)
+            await hide_banned_player_entries(db, run)
             if not skip_player_info:
                 await upsert_player_cache(db, names=player_names, avatars=new_avatars)
             stats["entries_upserted"] += count

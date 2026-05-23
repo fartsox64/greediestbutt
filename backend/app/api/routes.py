@@ -758,10 +758,12 @@ async def refresh_records_cache(db: AsyncSession) -> None:
             .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
             .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
             .outerjoin(banned_cte, banned_cte.c.steam_id == LeaderboardEntry.steam_id)
+            .outerjoin(User, User.steam_id == LeaderboardEntry.steam_id)
             .where(
                 DailyRun.sort_type == sort_type,
                 LeaderboardEntry.hidden == False,  # noqa: E712
                 banned_cte.c.steam_id.is_(None),
+                or_(User.steam_id.is_(None), User.banned_at.is_(None)),
                 value_filter,
             )
             .order_by(DailyRun.version, order_col)
