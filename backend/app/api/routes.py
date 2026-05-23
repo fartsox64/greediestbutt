@@ -592,40 +592,57 @@ async def get_player_heatmap(
 
 @router.get("/player/{steam_id}/rivals", response_model=RivalsResponse)
 async def get_player_rivals(steam_id: int, db: AsyncSession = Depends(get_db)):
-    auto_banned_sq = (
-        select(LeaderboardEntry.steam_id)
-        .where(LeaderboardEntry.hidden == True)  # noqa: E712
-        .group_by(LeaderboardEntry.steam_id)
-        .having(func.count() >= AUTO_BAN_THRESHOLD)
-        .scalar_subquery()
+    # Fast pre-check: if the target player is auto-banned, their runs are excluded
+    # everywhere, so rivals would be empty. Avoids embedding a subquery in the join.
+    hidden_count = await db.scalar(
+        select(func.count())
+        .where(LeaderboardEntry.steam_id == steam_id, LeaderboardEntry.hidden == True)  # noqa: E712
+    )
+    if hidden_count >= AUTO_BAN_THRESHOLD:
+        return RivalsResponse(rivals=[])
+
+    # CTE: the target player's visible runs (small set, fast index scan on steam_id+hidden)
+    PlayerEntry = aliased(LeaderboardEntry)
+    player_runs_cte = (
+        select(
+            PlayerEntry.daily_run_id,
+            PlayerEntry.rank.label("player_rank"),
+        )
+        .where(PlayerEntry.steam_id == steam_id, PlayerEntry.hidden == False)  # noqa: E712
+        .cte("player_runs")
     )
 
-    PlayerRun = aliased(LeaderboardEntry)
-    OpponentRun = aliased(LeaderboardEntry)
+    # CTE: auto-banned steam_ids (index scan on hidden, materialized once)
+    BannedEntry = aliased(LeaderboardEntry)
+    banned_cte = (
+        select(BannedEntry.steam_id)
+        .where(BannedEntry.hidden == True)  # noqa: E712
+        .group_by(BannedEntry.steam_id)
+        .having(func.count() >= AUTO_BAN_THRESHOLD)
+        .cte("banned")
+    )
 
+    # Drive from the player's small run set; LEFT JOIN anti-join replaces NOT IN.
+    OpponentRun = aliased(LeaderboardEntry)
     result = await db.execute(
         select(
             OpponentRun.steam_id,
             SteamPlayerCache.player_name,
             SteamPlayerCache.avatar_url,
             func.count().label("shared_days"),
-            func.sum(case((PlayerRun.rank < OpponentRun.rank, 1), else_=0)).label("wins"),
-            func.sum(case((PlayerRun.rank > OpponentRun.rank, 1), else_=0)).label("losses"),
-            func.sum(case((PlayerRun.rank == OpponentRun.rank, 1), else_=0)).label("ties"),
+            func.sum(case((player_runs_cte.c.player_rank < OpponentRun.rank, 1), else_=0)).label("wins"),
+            func.sum(case((player_runs_cte.c.player_rank > OpponentRun.rank, 1), else_=0)).label("losses"),
+            func.sum(case((player_runs_cte.c.player_rank == OpponentRun.rank, 1), else_=0)).label("ties"),
         )
-        .select_from(OpponentRun)
-        .join(PlayerRun, and_(
-            PlayerRun.daily_run_id == OpponentRun.daily_run_id,
-            PlayerRun.steam_id == steam_id,
-            PlayerRun.hidden == False,  # noqa: E712
-            PlayerRun.steam_id.notin_(auto_banned_sq),
-        ))
-        .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == OpponentRun.steam_id)
-        .where(
+        .select_from(player_runs_cte)
+        .join(OpponentRun, and_(
+            OpponentRun.daily_run_id == player_runs_cte.c.daily_run_id,
             OpponentRun.steam_id != steam_id,
             OpponentRun.hidden == False,  # noqa: E712
-            OpponentRun.steam_id.notin_(auto_banned_sq),
-        )
+        ))
+        .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == OpponentRun.steam_id)
+        .outerjoin(banned_cte, banned_cte.c.steam_id == OpponentRun.steam_id)
+        .where(banned_cte.c.steam_id.is_(None))
         .group_by(OpponentRun.steam_id, SteamPlayerCache.player_name, SteamPlayerCache.avatar_url)
         .order_by(func.count().desc())
         .limit(10)
