@@ -62,6 +62,28 @@ docker compose up -d --build
 
 Migrations are applied automatically on restart. Postgres data persists in the `pgdata` Docker volume across deploys.
 
+#### Large index migrations
+
+Some migrations add indexes that are large enough to cause noticeable table locks if built inside a transaction. These are flagged with a **PRODUCTION NOTE** in the migration file. The pattern is always the same: build the index(es) concurrently first, then deploy normally — the `IF NOT EXISTS` guard makes the migration a no-op for indexes that already exist.
+
+Migrations that require this treatment:
+
+**022 — rivals indexes**
+
+```bash
+docker compose exec db psql -U postgres -d greediest_butt -c "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_le_steam_hidden_run ON leaderboard_entries (steam_id, hidden, daily_run_id);"
+docker compose exec db psql -U postgres -d greediest_butt -c "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_le_run_hidden_steam_rank ON leaderboard_entries (daily_run_id, hidden, steam_id, rank);"
+```
+
+**023 — records indexes**
+
+```bash
+docker compose exec db psql -U postgres -d greediest_butt -c "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_le_hidden_value ON leaderboard_entries (value DESC NULLS LAST) WHERE hidden = false;"
+docker compose exec db psql -U postgres -d greediest_butt -c "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_le_hidden_time_taken ON leaderboard_entries (time_taken ASC NULLS LAST) WHERE hidden = false;"
+```
+
+Run each command separately — `CONCURRENTLY` cannot run inside a transaction block, so don't chain multiple `CREATE INDEX` statements in a single `psql` session.
+
 ### Firewall
 
 Docker modifies `iptables` directly and bypasses UFW by default. The solution has two parts: hook into Docker's `DOCKER-USER` chain via `after.rules`, and keep UFW's allow-list restricted to Cloudflare IP ranges.

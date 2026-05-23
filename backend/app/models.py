@@ -119,6 +119,8 @@ class LeaderboardEntry(Base):
         Index("ix_le_hidden_steam_id", "hidden", "steam_id"),
         Index("ix_le_steam_hidden_run", "steam_id", "hidden", "daily_run_id"),
         Index("ix_le_run_hidden_steam_rank", "daily_run_id", "hidden", "steam_id", "rank"),
+        Index("ix_le_hidden_value", "value", postgresql_where="hidden = false"),
+        Index("ix_le_hidden_time_taken", "time_taken", postgresql_where="hidden = false"),
     )
 
 

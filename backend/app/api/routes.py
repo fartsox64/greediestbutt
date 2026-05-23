@@ -734,59 +734,59 @@ async def get_records(db: AsyncSession = Depends(get_db)):
     if (cached := _cache_get(cache_key)) is not None:
         return cached
 
-    auto_banned_sq = (
-        select(LeaderboardEntry.steam_id)
-        .where(LeaderboardEntry.hidden == True)  # noqa: E712
-        .group_by(LeaderboardEntry.steam_id)
+    # Build banned CTE once, reused by both queries.
+    BannedEntry = aliased(LeaderboardEntry)
+    banned_cte = (
+        select(BannedEntry.steam_id)
+        .where(BannedEntry.hidden == True)  # noqa: E712
+        .group_by(BannedEntry.steam_id)
         .having(func.count() >= AUTO_BAN_THRESHOLD)
-        .scalar_subquery()
+        .cte("banned")
     )
 
     records = []
-    for version in GameVersion:
-        for sort_type in SortType:
-            if sort_type == SortType.SCORE:
-                order_col = LeaderboardEntry.value.desc()
-                value_filter = LeaderboardEntry.value.isnot(None)
-            else:
-                order_col = LeaderboardEntry.time_taken.asc()
-                value_filter = LeaderboardEntry.time_taken.isnot(None)
 
-            result = await db.execute(
-                select(
-                    LeaderboardEntry.id,
-                    LeaderboardEntry.steam_id,
-                    LeaderboardEntry.value,
-                    LeaderboardEntry.time_taken,
-                    LeaderboardEntry.rank,
-                    DailyRun.date,
-                    SteamPlayerCache.player_name,
-                )
-                .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
-                .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
-                .where(
-                    DailyRun.version == version,
-                    DailyRun.sort_type == sort_type,
-                    LeaderboardEntry.hidden == False,  # noqa: E712
-                    LeaderboardEntry.steam_id.notin_(auto_banned_sq),
-                    value_filter,
-                )
-                .order_by(order_col)
-                .limit(1)
+    # One query per sort direction: DISTINCT ON (version) picks the best row per
+    # version in a single scan instead of running a separate query per version.
+    for sort_type, order_col, value_filter in [
+        (SortType.SCORE, LeaderboardEntry.value.desc(),      LeaderboardEntry.value.isnot(None)),
+        (SortType.TIME,  LeaderboardEntry.time_taken.asc(),  LeaderboardEntry.time_taken.isnot(None)),
+    ]:
+        result = await db.execute(
+            select(
+                LeaderboardEntry.id,
+                LeaderboardEntry.steam_id,
+                LeaderboardEntry.value,
+                LeaderboardEntry.time_taken,
+                LeaderboardEntry.rank,
+                DailyRun.date,
+                DailyRun.version,
+                SteamPlayerCache.player_name,
             )
-            row = result.first()
-            if row:
-                records.append(RecordEntry(
-                    version=version,
-                    sort_type=sort_type,
-                    entry_id=row.id,
-                    steam_id=row.steam_id,
-                    player_name=row.player_name,
-                    value=row.value,
-                    time_taken=row.time_taken,
-                    date=str(row.date),
-                    rank=row.rank,
-                ))
+            .distinct(DailyRun.version)
+            .join(DailyRun, DailyRun.id == LeaderboardEntry.daily_run_id)
+            .outerjoin(SteamPlayerCache, SteamPlayerCache.steam_id == LeaderboardEntry.steam_id)
+            .outerjoin(banned_cte, banned_cte.c.steam_id == LeaderboardEntry.steam_id)
+            .where(
+                DailyRun.sort_type == sort_type,
+                LeaderboardEntry.hidden == False,  # noqa: E712
+                banned_cte.c.steam_id.is_(None),
+                value_filter,
+            )
+            .order_by(DailyRun.version, order_col)
+        )
+        for row in result.all():
+            records.append(RecordEntry(
+                version=GameVersion(row.version),
+                sort_type=sort_type,
+                entry_id=row.id,
+                steam_id=row.steam_id,
+                player_name=row.player_name,
+                value=row.value,
+                time_taken=row.time_taken,
+                date=str(row.date),
+                rank=row.rank,
+            ))
 
     response = RecordsResponse(records=records)
     _cache_set(cache_key, response, ttl=3600)
