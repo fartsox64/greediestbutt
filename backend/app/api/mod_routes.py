@@ -3,7 +3,7 @@
 import math
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import DailyRun, GameVersion, LeaderboardEntry, Report, SortType, SteamPlayerCache, User
-from .routes import _cache_invalidate_prefix
+from .routes import _cache_invalidate_prefix, refresh_records_cache
 from ..schemas import (
     AdminPlayerResult,
     AdminPlayerSearchResponse,
@@ -268,12 +268,19 @@ async def unhide_entry(
 
 
 # ---------------------------------------------------------------------------
-# Player unban
+# Player ban / unban
 # ---------------------------------------------------------------------------
+
+async def _refresh_records_bg() -> None:
+    from ..database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        await refresh_records_cache(db)
+
 
 @router.post("/players/{steam_id}/ban", status_code=204)
 async def ban_player(
     steam_id: int,
+    background_tasks: BackgroundTasks,
     mod=Depends(get_mod_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -294,11 +301,14 @@ async def ban_player(
     _cache_invalidate_prefix("player:")
     _cache_invalidate_prefix("overall:")
     _cache_invalidate_prefix("profile:")
+    _cache_invalidate_prefix("records")
+    background_tasks.add_task(_refresh_records_bg)
 
 
 @router.post("/players/{steam_id}/unban", status_code=204)
 async def unban_player(
     steam_id: int,
+    background_tasks: BackgroundTasks,
     admin=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -316,6 +326,8 @@ async def unban_player(
     _cache_invalidate_prefix("player:")
     _cache_invalidate_prefix("overall:")
     _cache_invalidate_prefix("profile:")
+    _cache_invalidate_prefix("records")
+    background_tasks.add_task(_refresh_records_bg)
 
 
 @router.get("/players/{steam_id}/hidden-runs", response_model=PlayerHiddenRunsResponse)
