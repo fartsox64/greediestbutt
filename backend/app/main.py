@@ -133,13 +133,17 @@ async def lifespan(app: FastAPI):
     app.state.job_state = _job_state
     log.info("Scheduler started — scraping every 10 minutes, name backfill every 15 minutes, full stats refresh daily at 02:00")
 
-    log.info("Pre-warming records cache...")
-    try:
-        async with AsyncSessionLocal() as db:
-            await refresh_records_cache(db)
-        log.info("Records cache warmed")
-    except Exception:
-        log.exception("Records cache pre-warm failed — first request will be slow")
+    async def _warm_records_cache() -> None:
+        log.info("Pre-warming records cache...")
+        try:
+            async with AsyncSessionLocal() as db:
+                await refresh_records_cache(db)
+            log.info("Records cache warmed")
+        except Exception:
+            log.exception("Records cache pre-warm failed")
+
+    import asyncio
+    asyncio.ensure_future(_warm_records_cache())
 
     yield
     scheduler.shutdown(wait=False)
