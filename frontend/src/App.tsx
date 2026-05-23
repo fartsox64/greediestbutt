@@ -216,10 +216,7 @@ export default function App() {
   const handlePageChange = (p: number) => {
     setPage(p);
   };
-  const handleRecordsClick = () => {
-    writeUrl({ ...snap(), view: "records", compareIds: null }, false);
-    setView("records");
-  };
+
   const handleHeadToHead = (p1: string, p2: string) => {
     const ids: [string, string] = [p1, p2];
     writeUrl({ ...snap(), view: "compare", compareIds: ids }, false);
@@ -513,16 +510,6 @@ export default function App() {
                 }`}
               >
                 Overall
-              </button>
-              <button
-                onClick={handleRecordsClick}
-                className={`px-4 py-2 transition-colors border-l border-isaac-border ${
-                  view === "records"
-                    ? "bg-isaac-accent text-isaac-bg font-bold"
-                    : "bg-isaac-surface text-isaac-muted hover:text-isaac-text"
-                }`}
-              >
-                Records
               </button>
             </div>
 
