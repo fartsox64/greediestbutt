@@ -8,7 +8,7 @@ import { FollowButton } from "./FollowButton";
 import { Heatmap } from "./Heatmap";
 import { Pagination } from "./Pagination";
 import { fetchHeatmap, fetchRivals } from "../api/client";
-import { calcHitsTaken } from "../utils";
+import { calcHitsTaken, calcItemCount } from "../utils";
 
 const HISTORY_PAGE_SIZE = 25;
 const RIVALS_PAGE_SIZE = 5;
@@ -366,7 +366,8 @@ function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, 
   ].filter((p) => p.value != null && p.value !== 0);
 
   const hitsTaken = calcHitsTaken(version, entry.damage_penalty, entry.exploration_bonus);
-  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null;
+  const itemCount = calcItemCount(entry.item_penalty, entry.schwag_bonus, entry.level);
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null || itemCount != null;
 
   return (
     <>
@@ -445,10 +446,20 @@ function RunRow({ entry, idx, version, sortType, canHide, onHide, onScoreClick, 
               ))}
             </div>
           )}
-          {hitsTaken != null && (
-            <div className="flex justify-between gap-6 border-t border-isaac-border pt-2 mt-1">
-              <span className="text-isaac-muted">Hits taken</span>
-              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
+          {(hitsTaken != null || itemCount != null) && (
+            <div className="border-t border-isaac-border pt-2 mt-1 space-y-1">
+              {hitsTaken != null && (
+                <div className="flex justify-between gap-6">
+                  <span className="text-isaac-muted">Hits taken</span>
+                  <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
+                </div>
+              )}
+              {itemCount != null && (
+                <div className="flex justify-between gap-6">
+                  <span className="text-isaac-muted">Items</span>
+                  <span className="text-isaac-text font-mono tabular-nums">{itemCount}</span>
+                </div>
+              )}
             </div>
           )}
         </div>,

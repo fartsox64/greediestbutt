@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import type { EntryDetail } from "../types";
 import { VERSION_LABELS } from "../types";
-import { calcHitsTaken, safeHttpsUrl } from "../utils";
+import { calcHitsTaken, calcItemCount, safeHttpsUrl } from "../utils";
 
 interface Props {
   entry: EntryDetail;
@@ -42,6 +42,7 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
   ].filter((p) => p.value != null && p.value !== 0);
 
   const hitsTaken = calcHitsTaken(entry.version, entry.damage_penalty, entry.exploration_bonus);
+  const itemCount = calcItemCount(entry.item_penalty, entry.schwag_bonus, entry.level);
 
   const rankClass =
     entry.rank === 1 ? "text-isaac-gold" :
@@ -169,13 +170,21 @@ export function ScoreDetail({ entry, avatarUrl, onPlayerClick, onBack }: Props) 
           </div>
         )}
 
-        {/* Hits taken */}
-        {hitsTaken != null && (
-          <div className="border-t border-isaac-border pt-5">
-            <div className="flex justify-between gap-8 text-sm">
-              <span className="text-isaac-muted">Hits taken</span>
-              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
-            </div>
+        {/* Hits taken / Item count */}
+        {(hitsTaken != null || itemCount != null) && (
+          <div className="border-t border-isaac-border pt-5 space-y-1.5">
+            {hitsTaken != null && (
+              <div className="flex justify-between gap-8 text-sm">
+                <span className="text-isaac-muted">Hits taken</span>
+                <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
+              </div>
+            )}
+            {itemCount != null && (
+              <div className="flex justify-between gap-8 text-sm">
+                <span className="text-isaac-muted">Items</span>
+                <span className="text-isaac-text font-mono tabular-nums">{itemCount}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,5 +1,17 @@
 const HITS_VERSIONS = new Set(["repentance", "afterbirth_plus", "afterbirth"]);
 
+export function calcItemCount(
+  itemPenalty: number | null,
+  schwagBonus: number | null,
+  level: number | null,
+): number | null {
+  if (itemPenalty == null || schwagBonus == null || level == null) return null;
+  if (schwagBonus === 0) return null;
+  const inner = 1.0 - (itemPenalty / 0.8) / schwagBonus;
+  if (inner <= 0) return null;
+  return Math.floor((Math.log(inner) / Math.log(0.8)) * Math.max(1.0, 2.5 * level));
+}
+
 export function calcHitsTaken(
   version: string,
   damagePenalty: number | null,
