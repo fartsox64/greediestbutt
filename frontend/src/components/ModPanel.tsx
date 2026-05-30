@@ -420,7 +420,7 @@ function DirectSourceBadge({ hiddenByName, hiddenByRole, hiddenAt }: { hiddenByN
   const handleMouseEnter = () => {
     if (!badgeRef.current) return;
     const rect = badgeRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    setPos({ top: rect.bottom + 4, left: rect.left });
   };
 
   return (
@@ -462,7 +462,7 @@ function ReportSourceBadge({ reports }: { reports: ReportSummary[] }) {
   const handleMouseEnter = () => {
     if (!badgeRef.current || reports.length === 0) return;
     const rect = badgeRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    setPos({ top: rect.bottom + 4, left: rect.left });
   };
 
   return (
