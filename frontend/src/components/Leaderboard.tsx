@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { GameVersion, LeaderboardEntry, SortType, User } from "../types";
 import { FollowButton } from "./FollowButton";
-import { calcHitsTaken, safeHttpsUrl } from "../utils";
+import { calcHitsTaken, calcItemCount, safeHttpsUrl } from "../utils";
 
 interface Props {
   entries: LeaderboardEntry[];
@@ -175,7 +175,8 @@ function Row({ entry, idx, version, sortType, avatarUrl, currentUser, isFollowin
   ].filter((p) => p.value != null && p.value !== 0);
 
   const hitsTaken = calcHitsTaken(version, entry.damage_penalty, entry.exploration_bonus);
-  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null;
+  const itemCount = calcItemCount(entry.item_penalty, entry.schwag_bonus, entry.level);
+  const hasDetails = (entry.level != null && entry.level !== 0) || bonuses.length > 0 || penalties.length > 0 || hitsTaken != null || itemCount != null;
   const isSelf = currentUser?.steam_id === entry.steam_id;
   const canReport = !!currentUser && !currentUser.role && !isSelf;
   const avatarSrc = safeHttpsUrl(avatarUrl);
@@ -260,7 +261,7 @@ function Row({ entry, idx, version, sortType, avatarUrl, currentUser, isFollowin
             </div>
           )}
           {bonuses.length > 0 && (
-            <div className={penalties.length > 0 || hitsTaken != null ? "mb-2" : ""}>
+            <div className={penalties.length > 0 || hitsTaken != null || itemCount != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Bonuses</div>
               {bonuses.map((b) => (
                 <div key={b.label} className="flex justify-between gap-6">
@@ -271,7 +272,7 @@ function Row({ entry, idx, version, sortType, avatarUrl, currentUser, isFollowin
             </div>
           )}
           {penalties.length > 0 && (
-            <div className={hitsTaken != null ? "mb-2" : ""}>
+            <div className={hitsTaken != null || itemCount != null ? "mb-2" : ""}>
               <div className="text-isaac-muted uppercase tracking-wider text-[10px] mb-1">Penalties</div>
               {penalties.map((p) => (
                 <div key={p.label} className="flex justify-between gap-6">
@@ -281,10 +282,20 @@ function Row({ entry, idx, version, sortType, avatarUrl, currentUser, isFollowin
               ))}
             </div>
           )}
-          {hitsTaken != null && (
-            <div className="flex justify-between gap-6 border-t border-isaac-border pt-2 mt-1">
-              <span className="text-isaac-muted">Hits taken</span>
-              <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
+          {(hitsTaken != null || itemCount != null) && (
+            <div className="border-t border-isaac-border pt-2 mt-1 space-y-1">
+              {hitsTaken != null && (
+                <div className="flex justify-between gap-6">
+                  <span className="text-isaac-muted">Hits taken</span>
+                  <span className="text-isaac-text font-mono tabular-nums">{hitsTaken}</span>
+                </div>
+              )}
+              {itemCount != null && (
+                <div className="flex justify-between gap-6">
+                  <span className="text-isaac-muted">Items</span>
+                  <span className="text-isaac-text font-mono tabular-nums">{itemCount}</span>
+                </div>
+              )}
             </div>
           )}
         </div>,
