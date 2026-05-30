@@ -7,6 +7,8 @@ on:
 jobs:
   check-frontend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,6 +18,8 @@ jobs:
 
   check-backend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,6 +31,7 @@ jobs:
   deploy:
     needs: [check-frontend, check-backend]
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Deploy
         uses: appleboy/ssh-action@v1
